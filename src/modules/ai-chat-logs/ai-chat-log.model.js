@@ -18,10 +18,10 @@ const AiChatLog = db.define(
         key: "id",
       },
     },
-    message: {
+    user_query: {
       type: DataTypes.TEXT,
     },
-    response: {
+    ai_response: {
       type: DataTypes.TEXT,
     },
     token_cost: {

@@ -60,6 +60,9 @@ import teacherBulkRoutes from "./src/modules/teachers/teacher.bulk.routes.js";
 import attendanceSummaryRoutes from "./src/modules/attendance/attendance.summary.routes.js";
 import attendanceAnalyticsRoutes from "./src/modules/attendance/attendance.analytics.routes.js";
 
+//rag
+import ragRoutes from "./modules/rag/rag.routes.js";
+
 app.use("/api/auth", authRoutes);
 
 app.use("/api/schools", schoolRoutes);
@@ -80,6 +83,9 @@ app.use("/api", teacherBulkRoutes);
 
 app.use("/api", attendanceSummaryRoutes);
 app.use("/api", attendanceAnalyticsRoutes);
+
+//rag
+app.use("/api/rag", ragRoutes);
 
 //404 route path
 app.use((req, res) => {

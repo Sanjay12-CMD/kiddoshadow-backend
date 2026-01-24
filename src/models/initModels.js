@@ -42,7 +42,6 @@ import PlayerAnswer from "../modules/game/player-answer.model.js";
 /* ===================== AI / LOGS ===================== */
 import AiChatLog from "../modules/ai-chat-logs/ai-chat-log.model.js";
 import AiOutput from "../modules/ai-outputs/ai-outputs.model.js";
-import RagQuery from "../modules/rag-queries/rag-query.model.js";
 import VoiceLog from "../modules/voice-logs/voice-log.model.js";
 
 /* ===================== TOKENS / BILLING ===================== */
@@ -180,7 +179,6 @@ const initAssociations = () => {
 
   /* ==================== AI / LOGS ==================== */
   AiChatLog.belongsTo(User, { foreignKey: "user_id" });
-  RagQuery.belongsTo(User, { foreignKey: "user_id" });
   VoiceLog.belongsTo(User, { foreignKey: "user_id" });
   AiOutput.belongsTo(User, { foreignKey: "user_id" });
  
