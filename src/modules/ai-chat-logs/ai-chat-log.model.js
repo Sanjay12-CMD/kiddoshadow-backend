@@ -1,6 +1,5 @@
 import { DataTypes } from "sequelize";
 import db from "../../config/db.js";
-// imports removed
 
 const AiChatLog = db.define(
   "ai_chat_log",
@@ -10,6 +9,7 @@ const AiChatLog = db.define(
       autoIncrement: true,
       primaryKey: true,
     },
+
     user_id: {
       type: DataTypes.BIGINT,
       allowNull: false,
@@ -18,15 +18,37 @@ const AiChatLog = db.define(
         key: "id",
       },
     },
+
     user_query: {
       type: DataTypes.TEXT,
+      allowNull: false,
     },
+
     ai_response: {
       type: DataTypes.TEXT,
+      allowNull: false,
     },
-    token_cost: {
+
+    tokens_used: {
       type: DataTypes.INTEGER,
       allowNull: false,
+      defaultValue: 0,
+    },
+
+    model_used: {
+      type: DataTypes.STRING,
+      allowNull: false,
+    },
+
+    ai_type: {
+      type: DataTypes.ENUM("rag", "chat", "quiz", "homework", "summary"),
+      allowNull: false,
+      defaultValue: "chat",
+    },
+
+    class_level: {
+      type: DataTypes.STRING,
+      allowNull: true,
     },
   },
   {
@@ -34,10 +56,10 @@ const AiChatLog = db.define(
     underscored: true,
     indexes: [
       { fields: ["user_id"] },
-      { fields: ["created_at"] }
-    ]
+      { fields: ["ai_type"] },
+      { fields: ["created_at"] },
+    ],
   }
 );
 
 export default AiChatLog;
-

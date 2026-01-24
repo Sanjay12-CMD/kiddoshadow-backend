@@ -1,5 +1,6 @@
 import Notification from "./notification.model.js";
 import AppError from "../../shared/appError.js";
+import { Op } from "sequelize";
 
 export const createNotificationService = async ({
   school_id,
@@ -39,7 +40,7 @@ export const createNotificationService = async ({
   return notification;
 };
 
-/* LIST FOR USER */
+
 export const listNotificationsForUserService = async ({
   school_id,
   user_role,
@@ -51,12 +52,25 @@ export const listNotificationsForUserService = async ({
     is_active: true,
   };
 
+  // role-based visibility
   if (user_role !== "admin") {
-    where.target_role = ["all", user_role];
+    where.target_role = {
+      [Op.in]: ["all", user_role],
+    };
   }
 
-  if (class_id) where.class_id = class_id;
-  if (section_id) where.section_id = section_id;
+  // scope resolution:
+  // - include school-wide (class_id = null)
+  // - include class-specific
+  // - include section-specific if provided
+  where[Op.or] = [
+    { class_id: null },
+    { class_id },
+  ];
+
+  if (section_id) {
+    where[Op.or].push({ section_id });
+  }
 
   return Notification.findAll({
     where,

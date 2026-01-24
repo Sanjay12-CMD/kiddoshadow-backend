@@ -86,6 +86,7 @@ const GameSessionPlayer = db.define(
       { fields: ["session_id"] },
       { fields: ["user_id"] },
       { fields: ["status"] },
+      { fields: ["session_id", "score", "finished_at"] },
       {
         unique: true,
         fields: ["session_id", "user_id"], // 🔒 prevent duplicate joins

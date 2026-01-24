@@ -66,5 +66,4 @@ const GameSession = db.define("game_session", {
   ]
 });
 
-// Associations
 export default GameSession;

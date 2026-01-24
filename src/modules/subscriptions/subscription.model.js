@@ -1,6 +1,5 @@
 import { DataTypes } from "sequelize";
 import db from "../../config/db.js";
-// imports removed
 
 const Subscription = db.define(
   "subscription",
@@ -11,94 +10,42 @@ const Subscription = db.define(
       autoIncrement: true,
     },
 
-    user_id: {
+    school_id: {
       type: DataTypes.BIGINT,
       allowNull: false,
-      unique: true,
       references: {
-        model: "users",
+        model: "schools",
         key: "id",
       },
+      unique: true, // one active subscription per school
     },
 
-    // Stripe identifiers
-    stripe_customer_id: {
-      type: DataTypes.STRING,
-      allowNull: true,
-      unique: true,
-    },
-    stripe_subscription_id: {
-      type: DataTypes.STRING,
-      allowNull: true,
-      unique: true,
-    },
-    stripe_product_id: {
-      type: DataTypes.STRING,
-      allowNull: true,
-    },
-    stripe_price_id: {
-      type: DataTypes.STRING,
-      allowNull: true,
-    },
-
-    // Subscription status
     status: {
-      type: DataTypes.ENUM(
-        "active",
-        "trialing",
-        "incomplete",
-        "incomplete_expired",
-        "past_due",
-        "canceled",
-        "unpaid",
-        "expired"
-      ),
+      type: DataTypes.ENUM("active", "inactive"),
       allowNull: false,
-      defaultValue: "incomplete",
+      defaultValue: "inactive",
     },
 
-    // Billing periods
-    current_period_start: {
-      type: DataTypes.DATE,
-      allowNull: true,
-    },
-    current_period_end: {
+    start_date: {
       type: DataTypes.DATE,
       allowNull: true,
     },
 
-    // Cancellation flags
-    cancel_at_period_end: {
-      type: DataTypes.BOOLEAN,
-      allowNull: false,
-      defaultValue: false,
-    },
-    canceled_at: {
+    end_date: {
       type: DataTypes.DATE,
       allowNull: true,
     },
 
-    // Business fields
-    plan_name: {
-      type: DataTypes.STRING,
+    notes: {
+      type: DataTypes.TEXT,
       allowNull: true,
-    },
-    plan_tokens: {
-      type: DataTypes.INTEGER,
-      allowNull: false,
-      defaultValue: 0,
     },
   },
   {
     tableName: "subscriptions",
     underscored: true,
-    indexes: [
-      { fields: ["user_id"] },
-      { fields: ["stripe_customer_id"] },
-      { fields: ["status"] },
-    ],
+    indexes: [{ fields: ["school_id"] }],
   }
 );
 
-// Associations (BEFORE EXPORT)
 export default Subscription;

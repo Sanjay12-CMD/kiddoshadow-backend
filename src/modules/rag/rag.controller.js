@@ -8,10 +8,15 @@ export const askQuestion = asyncHandler(async (req, res) => {
     return res.status(400).json({ message: "Question is required" });
   }
 
-  const answer = await askRag({ question, classLevel });
+  const result = await askRag({
+    question,
+    classLevel,
+    userId: req.user.id,
+  });
 
   res.json({
     question,
-    answer,
+    answer: result.answer,
+    sources: result.sources,
   });
 });
