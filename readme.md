@@ -1727,11 +1727,11 @@ All endpoints follow this error format:
 
 ## 📧 Support
 
-For issues and questions, please contact the development team or create an issue in the repository.
+For issues and questions, please contact me or create an issue in the repository.
 
 **Repository:** [https://github.com/aravindh99/kiddo-backend](https://github.com/aravindh99/kiddo-backend)
 
 ---
 
 **Last Updated:** 2026-01-28  
-**Maintained by:** Kiddo Development Team
+**Maintained by:** https://github.com/aravindh99
