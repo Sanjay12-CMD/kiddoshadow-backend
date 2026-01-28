@@ -1,6 +1,6 @@
 import express from "express";
-import auth from "../../shared/middlewares/auth.js";
-import allowRoles from "../../shared/middlewares/role.js";
+import { protect } from "../../shared/middlewares/auth.js";
+import { allowRoles } from "../../shared/middlewares/role.js";
 import {
   schoolAiAnalytics,
   teacherAiAnalytics,
@@ -12,7 +12,7 @@ const router = express.Router();
 // school admin / super admin
 router.get(
   "/analytics/ai/school",
-  auth,
+  protect,
   allowRoles("school_admin", "super_admin"),
   schoolAiAnalytics
 );
@@ -20,7 +20,7 @@ router.get(
 // teacher
 router.get(
   "/analytics/ai/teacher",
-  auth,
+  protect,
   allowRoles("teacher"),
   teacherAiAnalytics
 );
@@ -28,7 +28,7 @@ router.get(
 // student
 router.get(
   "/analytics/ai/student",
-  auth,
+  protect,
   allowRoles("student"),
   studentAiAnalytics
 );

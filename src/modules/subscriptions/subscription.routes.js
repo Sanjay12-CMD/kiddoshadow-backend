@@ -1,13 +1,13 @@
 import express from "express";
-import auth from "../../shared/middlewares/auth.js";
-import allowRoles from "../../shared/middlewares/role.js";
+import { protect } from "../../shared/middlewares/auth.js";
+import { allowRoles } from "../../shared/middlewares/role.js";
 import { upsertSubscription } from "./subscription.controller.js";
 
 const router = express.Router();
 
 router.post(
   "/subscriptions",
-  auth,
+  protect,
   allowRoles("super_admin"),
   upsertSubscription
 );
