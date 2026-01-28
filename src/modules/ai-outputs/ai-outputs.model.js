@@ -1,6 +1,6 @@
 import { DataTypes } from "sequelize";
 import db from "../../config/db.js";
-// imports removed
+
 
 const AiOutput = db.define("ai_output", {
     id: {
