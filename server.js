@@ -21,6 +21,16 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 
+//env validation
+const requiredEnv = ['TTS_SERVICE_URL'];
+
+for (const key of requiredEnv) {
+  if (!process.env[key]) {
+    throw new Error(`Missing required env: ${key}`);
+  }
+}
+
+
 // HTTP + SOCKET SERVER
 
 const httpServer = createServer(app);
