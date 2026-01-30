@@ -1,5 +1,3 @@
-import { request } from 'undici';
-
 const TTS_BASE_URL = process.env.TTS_SERVICE_URL;
 
 if (!TTS_BASE_URL) {
