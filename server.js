@@ -96,6 +96,12 @@ import teacherAiRoutes from "./src/modules/teacher-ai/teacher-ai.routes.js";
 import aiAnalyticsRoutes from "./src/modules/ai-analytics/ai-analytics.routes.js";
 import subscriptionRoutes from "./src/modules/subscriptions/subscription.routes.js";
 
+// teacher planning & tracking
+import teacherAssignmentRoutes from "./src/modules/teacher-assignments/teacher-assignment.routes.js";
+import teacherTimetableRoutes from "./src/modules/teacher-timetables/teacher-timetable.routes.js";
+import teacherClassSessionRoutes from "./src/modules/teacher-class-sessions/teacher-class-session.routes.js";
+
+
 // auth
 app.use("/api/auth", authRoutes);
 
@@ -129,6 +135,11 @@ app.use("/api", subscriptionRoutes);
 app.use("/api/rag", ragRoutes);
 app.use("/api", teacherAiRoutes);
 app.use("/api", aiAnalyticsRoutes);
+
+// teacher planning & tracking
+app.use("/api/teacher-assignments", teacherAssignmentRoutes);
+app.use("/api/teacher-timetables", teacherTimetableRoutes);
+app.use("/api/teacher-class-sessions", teacherClassSessionRoutes);
 
 
 // 404 + ERROR HANDLER

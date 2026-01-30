@@ -41,7 +41,7 @@ const Homework = db.define(
     },
 
     created_by: {
-      type: DataTypes.BIGINT, // teacher_id (user)
+      type: DataTypes.BIGINT, 
       allowNull: false,
     },
   },

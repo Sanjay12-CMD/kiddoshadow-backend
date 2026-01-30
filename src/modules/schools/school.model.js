@@ -1,6 +1,6 @@
 import { DataTypes } from "sequelize";
 import db from "../../config/db.js";
-// imports removed to prevent circular dependency
+
 
 const School = db.define(
   "school",
@@ -58,10 +58,16 @@ const School = db.define(
       allowNull: true,
     },
 
-   status: {
-  type: DataTypes.ENUM("pending", "active", "suspended", "expired"),
-  defaultValue: "pending",
-},
+    email: {
+      type: DataTypes.STRING,
+      allowNull: false,
+      unique: true,
+    },
+
+    status: {
+      type: DataTypes.ENUM("pending", "active", "suspended", "expired"),
+      defaultValue: "pending",
+    },
   },
   {
     tableName: "schools",

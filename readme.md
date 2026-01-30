@@ -456,43 +456,81 @@
 
 ---
 
-## 📊 Active Routes Summary
+22. 🧑‍🏫 Teacher Assignments (NEW)
 
-Based on `server.js` mounting:
+Base: /api/teacher-assignments
+Purpose: Assign teachers to class × section × subject
+Auth: ✅ Required (school_admin)
 
-| Module | Base Path | Status |
-|--------|-----------|--------|
-| Auth | `/api/auth` | ✅ Active |
-| Schools | `/api/schools` | ✅ Active |
-| Students | `/api/students` | ✅ Active |
-| Teachers | `/api/teachers` | ✅ Active |
-| Parents | `/api/parents` | ✅ Active |
-| Sections | `/api/sections` | ✅ Active |
-| Approvals | `/api` | ✅ Active |
-| Teacher Approvals | `/api` | ✅ Active |
-| Student Approvals | `/api` | ✅ Active |
-| Parent Approvals | `/api` | ✅ Active |
-| Parent Dashboard | `/api` | ✅ Active |
-| Audit | `/api` | ✅ Active |
-| Parent Bulk | `/api` | ✅ Active |
-| Teacher Bulk | `/api` | ✅ Active |
-| Attendance Summary | `/api` | ✅ Active |
-| Attendance Analytics | `/api` | ✅ Active |
-| RAG | `/api/rag` | ✅ Active |
-| Teacher AI | `/api` | ✅ Active |
-| AI Analytics | `/api` | ✅ Active |
-| Subscriptions | `/api` | ✅ Active |
-| Classes | - | ❌ Not Mounted |
-| Homework | - | ❌ Not Mounted |
-| Notifications | - | ❌ Not Mounted |
-| Report Cards | - | ❌ Not Mounted |
-| Exams | - | ❌ Not Mounted |
-| Timetables | - | ❌ Not Mounted |
-| Game/Quiz | - | ❌ Not Mounted |
-| Group Chat | - | ❌ Not Mounted |
-| Teacher Dashboard | - | ❌ Not Mounted |
+22.1 Assign Teacher to Section & Subject
 
----
+Endpoint: POST /api/teacher-assignments
+
+Auth: ✅ Required (school_admin)
+
+Validation: assignTeacherSchema
+
+Description:
+Assigns a teacher to a specific class, section, and subject.
+Used for timetable planning, class validation, and analytics.
+
+23. 📘 Teacher Timetables (NEW)
+
+Base: /api/teacher-timetables
+
+23.1 Get My Timetable (Teacher)
+
+Endpoint: GET /api/teacher-timetables/me
+
+Auth: ✅ Required (teacher)
+
+Query Params:
+
+day (number, 0–6) – day of week
+
+Description:
+Returns the logged-in teacher’s timetable for a given day.
+
+23.2 Create Teacher Timetable Entry (Admin)
+
+Endpoint: POST /api/teacher-timetables
+
+Auth: ✅ Required (school_admin)
+
+Validation: createTeacherTimetableSchema
+
+Description:
+Creates a timetable slot for a teacher (day, time, class, section, subject).
+
+24. ⏱️ Teacher Class Sessions (NEW)
+
+Base: /api/teacher-class-sessions
+Purpose: Track actual class start/end times
+Auth: JWT-based
+
+24.1 Start Class Session
+
+Endpoint: POST /api/teacher-class-sessions/start
+
+Auth: ✅ Required (teacher)
+
+Validation: startClassSessionSchema
+
+Description:
+Marks the start of a class session.
+Time is recorded server-side.
+Only one active session per teacher is allowed.
+
+24.2 End Class Session
+
+Endpoint: POST /api/teacher-class-sessions/:id/end
+
+Auth: ✅ Required (teacher)
+
+Description:
+Ends an active class session by ID.
+Records end time server-side.
+
 
 ## 👥 Role-Based Access
 
@@ -513,17 +551,6 @@ Based on `server.js` mounting:
 3. **Validation:** Mix of Zod and Joi schemas
 4. **CORS:** Configured for `localhost:5173` and `localhost:5174`
 5. **Database:** PostgreSQL with Sequelize ORM
-6. **⚠️ CRITICAL:** `db.sync({ force: true })` in server.js drops all tables on restart
 
----
 
-## 📧 Support
-
-For issues and questions, please contact me or create an issue in the repository.
-
-**Repository:** [https://github.com/aravindh99/kiddo-backend](https://github.com/aravindh99/kiddo-backend)
-
----
-
-**Last Updated:** 2026-01-28  
 **Maintained by:** https://github.com/aravindh99

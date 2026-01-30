@@ -9,6 +9,9 @@ import User from "../modules/users/user.model.js";
 import Teacher from "../modules/teachers/teacher.model.js";
 import Parent from "../modules/parents/parent.model.js";
 import Student from "../modules/students/student.model.js";
+import TeacherClassSession from "../modules/teacher-class-sessions/teacher-class-session.model.js";
+import TeacherTimetable from "../modules/teacher-timetables/teacher-timetable.model.js";
+import TeacherSectionAssignment from "../modules/teacher-assignments/teacher-assignment.model.js";
 
 
 /* ===================== ACADEMICS ===================== */
@@ -134,6 +137,10 @@ const initAssociations = () => {
   /* ==================== TEACHER ==================== */
   Teacher.belongsTo(School, { foreignKey: "school_id" });
   Teacher.hasMany(Class, { foreignKey: "class_teacher_id" });
+  Teacher.hasMany(TeacherClassSession, { foreignKey: "teacher_id" });
+  Teacher.hasMany(TeacherTimetable, { foreignKey: "teacher_id" });
+  Teacher.hasMany(TeacherSectionAssignment, { foreignKey: "teacher_id" });
+
 
   /* ==================== CLASS ==================== */
   Class.belongsTo(School, { foreignKey: "school_id" });

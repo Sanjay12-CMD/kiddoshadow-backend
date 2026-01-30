@@ -1,4 +1,4 @@
 node_modules
-env
-rag_data/
-books/
+.env
+rag_data
+books
