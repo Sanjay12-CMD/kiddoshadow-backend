@@ -1,10 +1,5 @@
 import { z } from "zod";
 
-/* admin: create teacher */
-export const createTeacherSchema = z.object({
-  username: z.string().min(3),
-  password: z.string().min(6),
-});
 
 /* admin: status */
 export const updateTeacherStatusSchema = z.object({

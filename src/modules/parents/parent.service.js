@@ -15,6 +15,8 @@ export const createParentAndLinkService = async ({
   if (!student_id) {
     throw new AppError("student_id is required", 400);
   }
+  
+
 
   return db.transaction(async (t) => {
     /**
@@ -99,11 +101,6 @@ export const linkExistingParentService = async ({
   school_id,
 }) => {
 
-  const allowedRelations = ["mother", "father", "guardian"];
-
-  if (!allowedRelations.includes(relation_type)) {
-    throw new AppError("Invalid relation_type", 400);
-  }
   return db.transaction(async (t) => {
     const user = await User.findOne({
       where: { id: parent_user_id, role: "parent", school_id },

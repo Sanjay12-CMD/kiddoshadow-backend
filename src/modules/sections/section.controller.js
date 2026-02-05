@@ -33,14 +33,14 @@ export const createSection = asyncHandler(async (req, res) => {
    LIST SECTIONS BY CLASS
 ========================= */
 export const listSections = asyncHandler(async (req, res) => {
-  const sections = await listSectionsService({
+  const result = await listSectionsService({
     school_id: req.user.school_id,
     class_id: req.params.class_id,
   });
 
   res.json({
-    success: true,
-    data: sections,
+    total: result.count,
+    items: result.rows,
   });
 });
 

@@ -104,7 +104,6 @@ import subscriptionRoutes from "./src/modules/subscriptions/subscription.routes.
 
 // teacher planning & tracking
 import teacherAssignmentRoutes from "./src/modules/teacher-assignments/teacher-assignment.routes.js";
-import teacherTimetableRoutes from "./src/modules/teacher-timetables/teacher-timetable.routes.js";
 import teacherClassSessionRoutes from "./src/modules/teacher-class-sessions/teacher-class-session.routes.js";
 import homeworkRoutes from "./src/modules/homework/homework.routes.js";
 import notificationRoutes from "./src/modules/notifications/notification.routes.js";
@@ -154,7 +153,6 @@ app.use("/api", aiAnalyticsRoutes);
 
 // teacher planning & tracking
 app.use("/api/teacher-assignments", teacherAssignmentRoutes);
-app.use("/api/teacher-timetables", teacherTimetableRoutes);
 app.use("/api/teacher-class-sessions", teacherClassSessionRoutes);
 app.use("/api/homework", homeworkRoutes);
 app.use("/api/notifications", notificationRoutes);

@@ -1,20 +1,17 @@
 import asyncHandler from "../../shared/asyncHandler.js";
-import AppError from "../../shared/appError.js";
 import {
   saveTimetableService,
-  getTimetableService,
+  getSectionTimetableService,
+  getTeacherTimetableService,
 } from "./timetable.service.js";
 
-/* TEACHER/ADMIN: SAVE */
+/* TEACHER/ADMIN: SAVE TIMETABLE */
 export const saveTimetable = asyncHandler(async (req, res) => {
-  const result = await saveTimetableService({
+  await saveTimetableService({
+    user: req.user,
     school_id: req.user.school_id,
     ...req.body,
   });
-
-  if (result?.error === "SECTION_NOT_FOUND") {
-    throw new AppError("Section not found or inactive", 404);
-  }
 
   res.json({
     success: true,
@@ -22,12 +19,25 @@ export const saveTimetable = asyncHandler(async (req, res) => {
   });
 });
 
-/* STUDENT / PARENT / TEACHER: VIEW */
-export const getTimetable = asyncHandler(async (req, res) => {
-  const timetable = await getTimetableService({
+/* STUDENT / PARENT: VIEW SECTION TIMETABLE */
+export const getSectionTimetable = asyncHandler(async (req, res) => {
+  const timetable = await getSectionTimetableService({
     school_id: req.user.school_id,
-    class_id: req.query.class_id,
-    section_id: req.query.section_id,
+    class_id: Number(req.query.class_id),
+    section_id: Number(req.query.section_id),
+  });
+
+  res.json({
+    success: true,
+    data: timetable,
+  });
+});
+
+/* TEACHER: VIEW OWN TIMETABLE */
+export const getTeacherTimetable = asyncHandler(async (req, res) => {
+  const timetable = await getTeacherTimetableService({
+    school_id: req.user.school_id,
+    teacher_id: req.user.teacher_id,
   });
 
   res.json({

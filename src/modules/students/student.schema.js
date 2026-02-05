@@ -1,14 +1,9 @@
 import { z } from "zod";
 
-/* admin: auto create */
+/* admin: create student */
 export const createStudentSchema = z.object({
-  class_id: z.number(),
-  sections: z.array(
-    z.object({
-      section_id: z.number(),
-      count: z.number().int().positive(),
-    })
-  ).min(1),
+  class_id: z.number().int().positive(),
+  section_id: z.number().int().positive(),
 });
 
 /* student: first login */

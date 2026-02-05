@@ -22,7 +22,7 @@ const router = express.Router();
    ADMIN ROUTES
 ========================= */
 router.post(
-  "/admin/parents",
+  "/parents",
   protect,
   allowRoles("admin"),
   validate(createParentAndLinkSchema),
@@ -30,7 +30,7 @@ router.post(
 );
 
 router.post(
-  "/admin/parents/link",
+  "/parents/link",
   protect,
   allowRoles("admin"),
   validate(linkExistingParentSchema),

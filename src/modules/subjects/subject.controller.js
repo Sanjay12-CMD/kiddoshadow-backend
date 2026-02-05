@@ -30,13 +30,13 @@ export const createSubject = asyncHandler(async (req, res) => {
    GET ALL SUBJECTS
 ========================= */
 export const getAllSubjects = asyncHandler(async (req, res) => {
-    const subjects = await getAllSubjectsService({
+    const result = await getAllSubjectsService({
         school_id: req.user.school_id,
     });
 
     res.status(200).json({
-        success: true,
-        data: subjects,
+        total: result.count,
+        items: result.rows,
     });
 });
 

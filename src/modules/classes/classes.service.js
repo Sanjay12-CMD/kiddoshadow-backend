@@ -13,7 +13,7 @@ export const createClassService = async ({
 };
 
 export const getClassesService = async (school_id) => {
-  return await Class.findAll({
+  return await Class.findAndCountAll({
     where: { school_id },
     include: [
       {

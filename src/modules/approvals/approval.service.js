@@ -1,5 +1,6 @@
 import { getPagination } from "../../shared/utils/pagination.js";
 import { Op } from "sequelize";
+import AppError from "../../shared/appError.js";
 
 import Student from "../students/student.model.js";
 import Teacher from "../teachers/teacher.model.js";
@@ -83,6 +84,7 @@ export const getPendingParentApprovalsService = async ({
   const { from_date, to_date } = safeQuery;
 
   const where = {
+    school_id,
     approval_status: "pending",
   };
 
@@ -120,7 +122,7 @@ export const processApprovalAction = async ({
   // 1. Validate Action
   const status = action === "approve" ? "approved" : "rejected";
   if (action === "reject" && !rejection_reason) {
-    throw new Error("Rejection reason is required"); // Should use AppError
+    throw new AppError("Rejection reason is required", 400);
   }
 
   // 2. Determine Target Model
@@ -128,26 +130,23 @@ export const processApprovalAction = async ({
   if (type === "student") Model = Student;
   else if (type === "teacher") Model = Teacher;
   else if (type === "parent") Model = Parent;
-  else throw new Error("Invalid approval type");
+  else throw new AppError("Invalid approval type", 400);
 
   // 3. Find Entity
   const entity = await Model.findByPk(id);
-  if (!entity) throw new Error("Entity not found");
+  if (!entity) throw new AppError("Entity not found", 404);
 
   // 4. Permission Check (CRITICAL)
   if (user.role === "teacher") {
-    // Teacher can only approve Students/Parents linked to their Class/Section
-    // TODO: Strict "Class Teacher" check:
-    // const section = await Section.findByPk(entity.section_id);
-    // if (section.class_teacher_id !== user.teacher_id) throw error...
-
-    // For now, allow any teacher in the same school to approve (lax mode)
-    // or check if teacher is associated with that class?
-    if (entity.school_id !== user.school_id) throw new Error("Unauthorized");
+    if (entity.school_id !== user.school_id) {
+      throw new AppError("Unauthorized", 403);
+    }
   }
 
   if (user.role === "school_admin") {
-    if (entity.school_id !== user.school_id) throw new Error("Unauthorized");
+    if (entity.school_id !== user.school_id) {
+      throw new AppError("Unauthorized", 403);
+    }
   }
 
   // 5. Update Status

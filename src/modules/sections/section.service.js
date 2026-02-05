@@ -44,7 +44,7 @@ export const createSectionService = async ({
    ADMIN: LIST SECTIONS BY CLASS
 ========================= */
 export const listSectionsService = async ({ school_id, class_id }) => {
-  return Section.findAll({
+  return Section.findAndCountAll({
     where: { school_id, class_id },
     order: [["name", "ASC"]],
   });

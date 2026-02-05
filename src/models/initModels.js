@@ -10,7 +10,6 @@ import Teacher from "../modules/teachers/teacher.model.js";
 import Parent from "../modules/parents/parent.model.js";
 import Student from "../modules/students/student.model.js";
 import TeacherClassSession from "../modules/teacher-class-sessions/teacher-class-session.model.js";
-import TeacherTimetable from "../modules/teacher-timetables/teacher-timetable.model.js";
 import TeacherSectionAssignment from "../modules/teacher-assignments/teacher-assignment.model.js";
 
 
@@ -18,8 +17,6 @@ import TeacherSectionAssignment from "../modules/teacher-assignments/teacher-ass
 import Class from "../modules/classes/classes.model.js";
 import Subject from "../modules/subjects/subject.model.js";
 import Timetable from "../modules/timetables/timetable.model.js";
-import Chapter from "../modules/chapters/chapter.model.js";
-import Topic from "../modules/topics/topic.model.js";
 import Section from "../modules/sections/section.model.js";
 
 //homework
@@ -29,11 +26,6 @@ import HomeworkSubmission from "../modules/homework/homework-submission.model.js
 
 /* ===================== ACTIVITY ===================== */
 import Attendance from "../modules/attendance/attendance.model.js";
-import TopicProgress from "../modules/topic-progress/topic-progress.model.js";
-
-/* ===================== CONTENT ===================== */
-import StudentContent from "../modules/student-content/student-content.model.js";
-import TeacherContent from "../modules/teacher-content/teacher-content.model.js";
 
 /* ===================== QUIZ / GAME ===================== */
 import Quiz from "../modules/quiz/quiz.model.js";
@@ -101,8 +93,6 @@ const initAssociations = () => {
   Section.hasMany(Student, { foreignKey: "section_id" });
 
   Student.hasMany(Attendance, { foreignKey: "student_id" });
-  Student.hasMany(StudentContent, { foreignKey: "student_id" });
-  Student.hasMany(TopicProgress, { foreignKey: "student_id" });
 
   /* ==================== REPORT CARDS ==================== */
 
@@ -144,7 +134,6 @@ const initAssociations = () => {
   Teacher.belongsTo(School, { foreignKey: "school_id" });
   Teacher.hasMany(Class, { foreignKey: "class_teacher_id" });
   Teacher.hasMany(TeacherClassSession, { foreignKey: "teacher_id" });
-  Teacher.hasMany(TeacherTimetable, { foreignKey: "teacher_id" });
   Teacher.hasMany(TeacherSectionAssignment, { foreignKey: "teacher_id" });
 
 
@@ -159,26 +148,11 @@ const initAssociations = () => {
 
   /* ==================== TIMETABLE ==================== */
   Timetable.belongsTo(Class, { foreignKey: "class_id" });
-  Timetable.belongsTo(Teacher, { foreignKey: "teacher_id" });
-  Timetable.belongsTo(Subject, { foreignKey: "subject_id" });
-  TeacherTimetable.belongsTo(Class, {
-    foreignKey: "class_id",
-  });
+  Timetable.belongsTo(Section, { foreignKey: "section_id" });
+  Timetable.belongsTo(TeacherSectionAssignment, { foreignKey: "teacher_assignment_id" });
 
-  TeacherTimetable.belongsTo(Section, {
-    foreignKey: "section_id",
-  });
 
-  TeacherTimetable.belongsTo(Subject, {
-    foreignKey: "subject_id",
-  });
-
-  /* ==================== CHAPTER / TOPIC ==================== */
-  Chapter.belongsTo(Subject, { foreignKey: "subject_id" });
-  Chapter.hasMany(Topic, { foreignKey: "chapter_id" });
-
-  Topic.belongsTo(Chapter, { foreignKey: "chapter_id" });
-  Topic.hasMany(Quiz, { foreignKey: "topic_id" });
+  /* ==================== CHAPTER / TOPIC (REMOVED - UNUSED) ==================== */
 
   /* ==================== QUIZ / GAME ==================== */
   Quiz.belongsTo(User, { foreignKey: "owner_user_id" });

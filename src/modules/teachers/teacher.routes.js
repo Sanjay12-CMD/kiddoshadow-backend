@@ -1,7 +1,6 @@
 import express from "express";
 import { protect } from "../../shared/middlewares/auth.js";
 import { allowRoles } from "../../shared/middlewares/role.js";
-import { forceFirstLogin } from "../../shared/middlewares/forceFirstLogin.js";
 import { validate } from "../../shared/middlewares/validate.js";
 
 import {
@@ -13,7 +12,6 @@ import {
 } from "./teacher.controller.js";
 
 import {
-  createTeacherSchema,
   updateTeacherStatusSchema,
   completeTeacherProfileSchema,
 } from "./teacher.schema.js";
@@ -35,7 +33,6 @@ router.use(protect, allowRoles("school_admin"));
 
 router.post(
   "/",
-  validate(createTeacherSchema),
   createTeacher
 );
 

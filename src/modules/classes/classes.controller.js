@@ -21,11 +21,11 @@ export const createClass = asyncHandler(async (req, res) => {
 });
 
 export const getClasses = asyncHandler(async (req, res) => {
-  const classes = await getClassesService(req.user.school_id);
+  const result = await getClassesService(req.user.school_id);
 
   res.json({
-    success: true,
-    data: classes,
+    total: result.count,
+    items: result.rows,
   });
 });
 

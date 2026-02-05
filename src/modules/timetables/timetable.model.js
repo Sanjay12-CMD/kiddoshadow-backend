@@ -18,11 +18,13 @@ const Timetable = db.define(
     class_id: {
       type: DataTypes.BIGINT,
       allowNull: false,
+      references: { model: "classes", key: "id" },
     },
 
     section_id: {
       type: DataTypes.BIGINT,
       allowNull: false,
+      references: { model: "sections", key: "id" },
     },
 
     day_of_week: {
@@ -47,9 +49,10 @@ const Timetable = db.define(
       allowNull: false,
     },
 
-    subject_id: {
+    teacher_assignment_id: {
       type: DataTypes.BIGINT,
       allowNull: true, // NULL = break
+      references: { model: "teacher_section_assignments", key: "id" },
     },
 
     title: {
@@ -71,6 +74,7 @@ const Timetable = db.define(
       { fields: ["school_id"] },
       { fields: ["class_id", "section_id"] },
       { fields: ["day_of_week"] },
+      { fields: ["teacher_assignment_id"] },
     ],
   }
 );

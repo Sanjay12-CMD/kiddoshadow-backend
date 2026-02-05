@@ -37,7 +37,7 @@ export const createSubjectService = async ({
    GET ALL SUBJECTS
 ========================= */
 export const getAllSubjectsService = async ({ school_id }) => {
-    return Subject.findAll({
+    return Subject.findAndCountAll({
         where: { school_id },
         order: [["name", "ASC"]],
     });

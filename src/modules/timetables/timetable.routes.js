@@ -1,24 +1,30 @@
 import express from "express";
 import { protect } from "../../shared/middlewares/auth.js";
+import { allowRoles } from "../../shared/middlewares/role.js";
 import { validate } from "../../shared/middlewares/validate.js";
 import { saveTimetableSchema } from "./timetable.schema.js";
 import {
   saveTimetable,
-  getTimetable,
+  getSectionTimetable,
+  getTeacherTimetable,
 } from "./timetable.controller.js";
-import {
-  allowAdminOrSectionClassTeacher,
-} from "../../shared/middlewares/permissions.js";
-
 
 const router = express.Router();
 
 router.use(protect);
 
-// teacher/admin
-router.post("/", allowAdminOrSectionClassTeacher, validate(saveTimetableSchema), saveTimetable);
+// Admin or Teacher: Save timetable
+router.post(
+  "/",
+  allowRoles("school_admin", "teacher"),
+  validate(saveTimetableSchema),
+  saveTimetable
+);
 
-// student / parent / teacher
-router.get("/", getTimetable);
+// Student/Parent: View section timetable
+router.get("/section", getSectionTimetable);
+
+// Teacher: View own timetable
+router.get("/teacher/me", allowRoles("teacher"), getTeacherTimetable);
 
 export default router;
