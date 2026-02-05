@@ -5,17 +5,18 @@ import {
     updateSubject,
     deleteSubject,
 } from "./subject.controller.js";
-import { validate } from "../../shared/validate.js";
+import { validate } from "../../shared/middlewares/validate.js";
 import {
     createSubjectSchema,
     updateSubjectSchema,
 } from "./subject.schema.js";
-import { protect, authorize } from "../../modules/auth/auth.middleware.js";
+import { protect } from "../../shared/middlewares/auth.js";
+import { allowRoles } from "../../shared/middlewares/role.js";
 
 const router = express.Router();
 
 router.use(protect);
-router.use(authorize("school_admin")); // Only School Admins can manage subjects
+router.use(allowRoles("school_admin")); // Only School Admins can manage subjects
 
 router
     .route("/")
