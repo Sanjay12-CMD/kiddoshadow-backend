@@ -4,6 +4,11 @@ export const createSchoolSchema = z.object({
   name: z.string().min(1),
   code: z.string().min(1),
   cbse_affiliation_no: z.string().min(1),
+  address: z.string().min(1),
+  city: z.string().min(1),
+  state: z.string().min(1),
+  zip: z.string().min(1),
+  email: z.string().email(),
   admin_username: z.string().min(3),
   admin_password: z.string().min(6),
 });

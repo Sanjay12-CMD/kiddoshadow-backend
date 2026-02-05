@@ -28,7 +28,7 @@ router.post(
   completeTeacherProfile
 );
 
-router.get("/me", protect, forceFirstLogin, getMyProfile);
+router.get("/me", protect, getMyProfile);
 
 /* admin */
 router.use(protect, allowRoles("school_admin"));

@@ -3,14 +3,14 @@ import * as service from "./teacher-timetable.service.js";
 
 /* TEACHER */
 export const getMyTimetable = asyncHandler(async (req, res) => {
-  const day = Number(req.query.day);
-
   const timetable = await service.getTeacherTimetable({
     teacherId: req.user.id,
-    day,
   });
 
-  res.json(timetable);
+  res.json({
+    success: true,
+    data: timetable,
+  });
 });
 
 /* ADMIN */

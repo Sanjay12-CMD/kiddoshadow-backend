@@ -110,6 +110,20 @@ export const joinMultiplayerQuiz = asyncHandler(async (req, res) => {
     throw new AppError("Room not found", 404);
   }
 
+  // 👩‍🏫 TEACHER / HOST LOGIC
+  // Teachers don't join as players. They just need the session ID to enter the lobby as host.
+  if (req.user.role === "teacher") {
+    // Optional: Check if this teacher is actually the host? 
+    // Usually yes, but even if another teacher joins, maybe they just observe?
+    // For now, allow any teacher to 'join' the view, but client handles "Start" button visibility based on ID.
+    return res.json({
+      sessionId: session.id,
+      isTeacher: true,
+      isHost: session.host_user_id === req.user.id,
+    });
+  }
+
+  // 🎓 STUDENT LOGIC
   if (session.status === "FINISHED") {
     throw new AppError("Quiz already finished", 403);
   }
@@ -144,7 +158,7 @@ export const joinMultiplayerQuiz = asyncHandler(async (req, res) => {
   const player = await GameSessionPlayer.create({
     session_id: session.id,
     user_id: req.user.id,
-    is_host: session.host_user_id === req.user.id,
+    is_host: session.host_user_id === req.user.id, // Should usually be false for students if teacher created it
     status: "WAITING",
   });
 

@@ -36,6 +36,22 @@ export function initGameSocket(io) {
      * JOIN QUIZ ROOM
      */
     socket.on("quiz:join", async ({ sessionId }) => {
+      // 1️⃣ HOST / TEACHER CHECK
+      // If user is the creator of the session, let them in without a player record
+      const session = await GameSession.findByPk(sessionId);
+
+      if (session && session.host_user_id === socket.user.id) {
+        socket.join(`quiz:${sessionId}`);
+        socket.emit("quiz:joined", {
+          sessionId,
+          playerId: null, // Teacher is not a player
+          status: session.status,
+          isHost: true
+        });
+        return;
+      }
+
+      // 2️⃣ STUDENT / PLAYER CHECK
       const player = await GameSessionPlayer.findOne({
         where: {
           session_id: sessionId,
@@ -73,6 +89,7 @@ export function initGameSocket(io) {
         sessionId,
         playerId: player.id,
         status: player.status,
+        isHost: false // Student is not host (usually)
       });
     });
 

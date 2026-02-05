@@ -1,4 +1,5 @@
 import asyncHandler from "../../shared/asyncHandler.js";
+import jwt from "jsonwebtoken";
 import AppError from "../../shared/appError.js";
 import {
   createTeacherService,
@@ -45,12 +46,10 @@ export const updateTeacherStatus = asyncHandler(async (req, res) => {
 /* TEACHER: COMPLETE PROFILE */
 export const completeTeacherProfile = asyncHandler(async (req, res) => {
   const {
-    name,
-    phone,
-    gender,
     designation,
     qualification,
     experience,
+    subjects,
   } = req.body;
 
   const teacher = await Teacher.findOne({
@@ -61,19 +60,34 @@ export const completeTeacherProfile = asyncHandler(async (req, res) => {
     throw new AppError("Teacher profile not found", 404);
   }
 
-  await User.update(
-    { name, phone, first_login: false },
-    { where: { id: req.user.id } }
-  );
+  // Update User details
+  const user = await User.update(
+    { name, phone, email: req.body.email, first_login: false },
+    { where: { id: req.user.id }, returning: true, plain: true }
+  ).then(() => User.findByPk(req.user.id)); // Fetch updated user for token
 
+  // Update Teacher details
   await teacher.update({
     gender,
     designation,
     qualification,
     experience,
+    subjects, // Save subjects array
   });
 
-  res.json({ message: "Profile completed" });
+  /* Create new token */
+  const token = jwt.sign(
+    {
+      id: user.id,
+      role: user.role,
+      school_id: user.school_id,
+      iat: Date.now(),
+    },
+    process.env.JWT_SECRET,
+    { expiresIn: process.env.JWT_EXPIRES_IN }
+  );
+
+  res.json({ message: "Profile completed", token, user });
 });
 
 /* TEACHER: MY PROFILE */

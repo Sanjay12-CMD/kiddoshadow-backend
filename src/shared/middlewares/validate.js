@@ -2,7 +2,25 @@ import AppError from "../appError.js";
 
 export const validate = (schema) => (req, res, next) => {
   try {
-    req.body = schema.parse(req.body);
+    // Check if schema is structured (has body/query/params keys)
+    const shape = schema.shape;
+    const isStructured = shape && (shape.body || shape.query || shape.params);
+
+    if (isStructured) {
+      const result = schema.parse({
+        body: req.body,
+        query: req.query,
+        params: req.params,
+      });
+
+      if (result.body) req.body = result.body;
+      if (result.query) Object.assign(req.query, result.query);
+      if (result.params) Object.assign(req.params, result.params);
+    } else {
+      // Legacy: validate body only meant for flat schemas
+      req.body = schema.parse(req.body);
+    }
+
     next();
   } catch (err) {
     const message = err.errors?.[0]?.message || "Invalid request";

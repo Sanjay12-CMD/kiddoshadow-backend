@@ -128,3 +128,22 @@ export const getReportCardService = async ({ report_card_id }) => {
     ],
   });
 };
+
+export const listReportCardsService = async ({ student_id, school_id }) => {
+  return toList(ReportCard.findAll({
+    where: { student_id },
+    include: [
+      {
+        model: Exam,
+        where: { school_id },
+        attributes: ["id", "name", "date"],
+      },
+    ],
+    order: [[Exam, "date", "DESC"]],
+  }));
+};
+
+async function toList(promise) {
+  const list = await promise;
+  return { count: list.length, rows: list };
+}

@@ -39,3 +39,10 @@ export const listHomework = asyncHandler(async (req, res) => {
     data: homework,
   });
 });
+export const getHomeworkSummary = asyncHandler(async (req, res) => {
+  res.json({ success: true, data: {} });
+});
+
+export const getHomeworkStudentStatus = asyncHandler(async (req, res) => {
+  res.json({ success: true, data: [] });
+});

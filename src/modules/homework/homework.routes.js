@@ -1,6 +1,6 @@
 import express from "express";
-import {protect} from "../../shared/middlewares/auth.js";
-import {validate} from "../../shared/middlewares/validate.js";
+import { protect } from "../../shared/middlewares/auth.js";
+import { validate } from "../../shared/middlewares/validate.js";
 import { submitHomework } from "./homework-submission.controller.js";
 import {
   createHomeworkSchema,
@@ -10,10 +10,12 @@ import {
 import {
   createHomework,
   listHomework,
+  getHomeworkSummary,
+  getHomeworkStudentStatus,
 } from "./homework.controller.js";
 import {
   allowAdminOrSectionClassTeacher,
-} from "../../shared/middlewares/permissions.js";
+} from "../../shared/middlewares/permission.js";
 
 
 const router = express.Router();

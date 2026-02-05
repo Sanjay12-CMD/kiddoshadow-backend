@@ -1,4 +1,4 @@
-import Notification from "./notification.model.js";
+import Notification from "./notifications.model.js";
 import AppError from "../../shared/appError.js";
 import { Op } from "sequelize";
 
@@ -61,14 +61,20 @@ export const listNotificationsForUserService = async ({
 
   // scope resolution:
   // - include school-wide (class_id = null)
-  // - include class-specific
-  // - include section-specific if provided
-  where[Op.or] = [
-    { class_id: null },
-    { class_id },
-  ];
+  const orConditions = [{ class_id: null }];
+
+  if (class_id) {
+    orConditions.push({ class_id });
+  }
+
+  where[Op.or] = orConditions;
 
   if (section_id) {
+    // If we have an OR condition for class, we need to be careful. 
+    // Usually section notifications invoke specific section. 
+    // Assuming structure: (class_id IS NULL) OR (class_id = X) OR (section_id = Y)
+    // Or is it (class_id IS NULL) OR (class_id = X AND (section_id IS NULL OR section_id = Y))?
+    // Based on original code: where[Op.or].push({ section_id }) implies top-level OR.
     where[Op.or].push({ section_id });
   }
 

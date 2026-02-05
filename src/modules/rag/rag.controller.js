@@ -15,7 +15,7 @@ export const askQuestion = asyncHandler(async (req, res) => {
 
   const result = await askRag({
     question,
-    classLevel,
+    classLevel ,
     userId: req.user.id,
   });
 

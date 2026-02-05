@@ -1,4 +1,4 @@
-import Notification from "./notification.model.js";
+import Notification from "./notifications.model.js";
 import NotificationAck from "./notification-ack.model.js";
 import AppError from "../../shared/appError.js";
 
@@ -7,9 +7,9 @@ export const acknowledgeNotificationService = async ({
   user_id,
   user_role,
 }) => {
- if (!["parent", "teacher", "student"].includes(user_role)) {
-  throw new AppError("Not allowed to acknowledge", 403);
-}
+  if (!["parent", "teacher", "student"].includes(user_role)) {
+    throw new AppError("Not allowed to acknowledge", 403);
+  }
 
   const notification = await Notification.findByPk(notification_id);
   if (!notification) {

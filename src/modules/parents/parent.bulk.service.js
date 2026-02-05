@@ -9,6 +9,27 @@ export const bulkApproveParentsService = async ({
   school_id,
 }) => {
   return db.transaction(async (t) => {
+    // check caller (admin) exists and has allowed role
+    const adminUser = await User.findByPk(admin_user_id, { transaction: t });
+    console.log(
+      "bulkApproveParentsService called by:",
+      admin_user_id,
+      adminUser ? adminUser.role : null
+    );
+
+    if (!adminUser) {
+      const err = new Error("Forbidden: admin user not found");
+      err.statusCode = 403;
+      throw err;
+    }
+
+    const allowedRoles = ["admin", "superadmin", "school_admin"];
+    if (!allowedRoles.includes(adminUser.role)) {
+      const err = new Error("Forbidden: insufficient role");
+      err.statusCode = 403;
+      throw err;
+    }
+
     const parents = await Parent.findAll({
       where: {
         id: parent_ids,

@@ -102,4 +102,3 @@ Answer (simple, clear, student-friendly):
     sources,
   };
 }
-  

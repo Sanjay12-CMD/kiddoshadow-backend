@@ -2,6 +2,7 @@ import {
   markAttendanceService,
   getTeacherAttendanceSummaryService,
   getParentAttendanceSummaryService,
+  getStudentAttendanceSummaryService,
 } from "./attendance.summary.service.js";
 
 /* =========================
@@ -47,6 +48,25 @@ export const getParentAttendanceSummary = async (req, res, next) => {
   try {
     const result = await getParentAttendanceSummaryService({
       parent_user_id: req.user.id,
+      query: req.query,
+    });
+
+    res.json({
+      total: result.count,
+      items: result.rows,
+    });
+  } catch (e) {
+    next(e);
+  }
+};
+
+/* =========================
+   STUDENT: SUMMARY
+========================= */
+export const getStudentAttendanceSummary = async (req, res, next) => {
+  try {
+    const result = await getStudentAttendanceSummaryService({
+      student_user_id: req.user.id,
       query: req.query,
     });
 

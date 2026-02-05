@@ -2,7 +2,7 @@ import Homework from "./homework.model.js";
 import Section from "../sections/section.model.js";
 import Subject from "../subjects/subject.model.js";
 import { triggerHomeworkNotification } from "../notifications/notification-trigger.service.js";
-import Subject from "../subjects/subject.model.js";
+
 
 export const createHomeworkService = async ({
   school_id,
@@ -42,12 +42,12 @@ export const createHomeworkService = async ({
   });
 
   await triggerHomeworkNotification({
-  school_id,
-  teacher_user_id: created_by,
-  class_id,
-  section_id,
-  subject_name: subject?.name || "subject",
-});
+    school_id,
+    teacher_user_id: created_by,
+    class_id,
+    section_id,
+    subject_name: subject?.name || "subject",
+  });
 
   return { homework };
 };

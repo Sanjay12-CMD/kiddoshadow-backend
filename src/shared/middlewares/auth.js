@@ -3,7 +3,7 @@ import User from "../../modules/users/user.model.js";
 import School from "../../modules/schools/school.model.js";
 import AppError from "../appError.js";
 
-export  async function protect(req, res, next) {
+export async function protect(req, res, next) {
   try {
     // 1️⃣ Extract token
     const header = req.headers.authorization;
@@ -31,7 +31,7 @@ export  async function protect(req, res, next) {
       const school = await School.findByPk(user.school_id);
 
       if (!school || school.status !== "active") {
-        throw new AppError("School is inactive", 403);
+        throw new AppError(`Forbidden: School ${user.school_id} is ${school ? school.status : 'missing'}`, 403);
       }
     }
 

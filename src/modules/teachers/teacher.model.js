@@ -53,6 +53,37 @@ const Teacher = db.define(
       type: DataTypes.INTEGER,
       allowNull: true,
     },
+
+    approval_status: {
+      type: DataTypes.ENUM("pending", "approved", "rejected"),
+      allowNull: false,
+      defaultValue: "pending",
+    },
+
+    subjects: {
+      type: DataTypes.JSON, // Stores array of subject names/details
+      allowNull: true,
+      defaultValue: [],
+    },
+
+    approved_by: {
+      type: DataTypes.BIGINT,
+      allowNull: true,
+      references: {
+        model: "users",
+        key: "id",
+      },
+    },
+
+    rejection_reason: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+
+    approved_at: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
   },
   {
     tableName: "teachers",

@@ -7,7 +7,9 @@ export function allowRoles(...allowedRoles) {
     }
 
     if (!allowedRoles.includes(req.user.role)) {
-      return next(new AppError("Forbidden", 403));
+    console.log("Role:", req.user.role, "Allowed:", allowedRoles);
+
+      return next(new AppError("Forbidden role", 403));
     }
 
     next();

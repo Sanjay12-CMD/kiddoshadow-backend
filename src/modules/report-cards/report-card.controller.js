@@ -5,6 +5,7 @@ import {
   saveReportCardMarksService,
   publishReportCardService,
   getReportCardService,
+  listReportCardsService,
 } from "./report-card.service.js";
 
 /* TEACHER: CREATE */
@@ -78,5 +79,31 @@ export const getReportCard = asyncHandler(async (req, res) => {
   res.json({
     success: true,
     data: reportCard,
+  });
+});
+
+export const listReportCards = asyncHandler(async (req, res) => {
+  const student_id = req.user.additionalClaims?.student_id;
+
+  if (!student_id && req.user.role === 'student') {
+    const Student = (await import("../students/student.model.js")).default;
+    const s = await Student.findOne({ where: { user_id: req.user.id } });
+    if (s) req.user.student_id = s.id;
+  }
+
+  const idToUse = student_id || req.user.student_id;
+
+  if (!idToUse) {
+    throw new AppError("Student profile not found", 404);
+  }
+
+  const result = await listReportCardsService({
+    student_id: idToUse,
+    school_id: req.user.school_id,
+  });
+
+  res.json({
+    success: true,
+    data: result.rows,
   });
 });

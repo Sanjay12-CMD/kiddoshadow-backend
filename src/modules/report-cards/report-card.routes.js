@@ -1,6 +1,6 @@
 import express from "express";
-import {protect} from "../../shared/middlewares/auth.js";
-import {validate} from "../../shared/middlewares/validate.js";
+import { protect } from "../../shared/middlewares/auth.js";
+import { validate } from "../../shared/middlewares/validate.js";
 import {
   createReportCardSchema,
   saveReportCardMarksSchema,
@@ -11,10 +11,12 @@ import {
   saveReportCardMarks,
   publishReportCard,
   getReportCard,
+  listReportCards,
 } from "./report-card.controller.js";
 import {
   allowAdminOrClassTeacher,
 } from "../../shared/middlewares/permissions.js";
+import { allowRoles } from "../../shared/middlewares/role.js";
 
 const router = express.Router();
 
@@ -35,6 +37,7 @@ router.post(
 );
 
 /* view */
+router.get("/student/list", allowRoles("student"), listReportCards);
 router.get("/:id", getReportCard);
 
 export default router;

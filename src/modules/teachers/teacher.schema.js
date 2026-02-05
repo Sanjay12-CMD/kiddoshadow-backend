@@ -17,5 +17,7 @@ export const completeTeacherProfileSchema = z.object({
   gender: z.enum(["male", "female", "other"]).optional(),
   designation: z.string().optional(),
   qualification: z.string().optional(),
-  experience: z.number().int().nonnegative().optional(),
+  experience: z.coerce.number().int().nonnegative().optional(),
+  email: z.string().email().optional(),
+  subjects: z.array(z.string()).optional(), // Array of subject names
 });

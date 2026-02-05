@@ -28,6 +28,15 @@ const Section = db.define(
       },
     },
 
+    class_teacher_id: {
+      type: DataTypes.BIGINT,
+      allowNull: true,
+      references: {
+        model: "teachers",
+        key: "id",
+      },
+    },
+
     name: {
       type: DataTypes.STRING(10),
       allowNull: false,

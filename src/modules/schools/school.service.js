@@ -10,6 +10,11 @@ export const createSchoolService = async ({
   name,
   code,
   cbse_affiliation_no,
+  address,
+  city,
+  state,
+  zip,
+  email,
   admin_username,
   admin_password,
 }) => {
@@ -25,6 +30,11 @@ export const createSchoolService = async ({
     school_name: name,
     school_code: code,
     cbse_affiliation_no,
+    address,
+    city,
+    state,
+    zip,
+    email,
     status: "pending",
   });
 

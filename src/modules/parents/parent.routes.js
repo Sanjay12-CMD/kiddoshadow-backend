@@ -13,6 +13,7 @@ import {
   createParentAndLink,
   linkExistingParent,
   updateParentProfile,
+  getMyProfile,
 } from "./parent.controller.js";
 
 const router = express.Router();
@@ -45,6 +46,13 @@ router.patch(
   allowRoles("parent"),
   validate(updateParentProfileSchema),
   updateParentProfile
+);
+
+router.get(
+  "/parents/profile",
+  protect,
+  allowRoles("parent"),
+  getMyProfile
 );
 
 export default router;

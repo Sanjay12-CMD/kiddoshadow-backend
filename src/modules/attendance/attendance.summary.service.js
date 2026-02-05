@@ -136,3 +136,46 @@ export const getParentAttendanceSummaryService = async ({
     order: [["date", "DESC"]],
   });
 };
+
+/* =========================
+   STUDENT: ATTENDANCE SUMMARY
+========================= */
+export const getStudentAttendanceSummaryService = async ({
+  student_user_id,
+  query,
+}) => {
+  const { limit, offset } = getPagination(query);
+  const { from_date, to_date } = query || {};
+
+  const student = await Student.findOne({ where: { user_id: student_user_id } });
+  if (!student) {
+    throw new AppError("Student profile not found", 404);
+  }
+
+  const where = {
+    student_id: student.id,
+  };
+
+  if (from_date || to_date) {
+    where.date = {};
+    if (from_date) where.date[Op.gte] = from_date;
+    if (to_date) where.date[Op.lte] = to_date;
+  }
+
+  return Attendance.findAndCountAll({
+    where,
+    include: [
+      {
+        model: Student,
+        include: [
+          { model: User, attributes: ["id", "name"] },
+          { model: Class, attributes: ["id", "class_name"] },
+          { model: Section, attributes: ["id", "name"] },
+        ],
+      },
+    ],
+    limit,
+    offset,
+    order: [["date", "DESC"]],
+  });
+};

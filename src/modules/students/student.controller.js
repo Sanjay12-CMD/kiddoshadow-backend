@@ -1,4 +1,5 @@
 import asyncHandler from "../../shared/asyncHandler.js";
+import jwt from "jsonwebtoken";
 import AppError from "../../shared/appError.js";
 import {
   autoCreateStudentsService,
@@ -55,7 +56,20 @@ export const updateStudentStatus = asyncHandler(async (req, res) => {
 
 /* STUDENT: COMPLETE PROFILE */
 export const completeStudentProfile = asyncHandler(async (req, res) => {
-  const { name, phone } = req.body;
+  const {
+    name,
+    phone,
+    dob,
+    gender,
+    blood_group,
+    father_name,
+    mother_name,
+    guardian_name,
+    father_occupation,
+    mother_occupation,
+    address,
+    family_income,
+  } = req.body;
 
   const student = await Student.findOne({
     where: { user_id: req.user.id },
@@ -63,11 +77,36 @@ export const completeStudentProfile = asyncHandler(async (req, res) => {
   if (!student) throw new AppError("Student profile not found", 404);
 
   await User.update(
-    { name, phone, first_login: false },
+    { name, phone, email: req.body.email, first_login: false },
     { where: { id: req.user.id } }
   );
 
-  res.json({ message: "Profile completed" });
+  await student.update({
+    dob,
+    gender,
+    blood_group,
+    father_name,
+    mother_name,
+    guardian_name,
+    father_occupation,
+    mother_occupation,
+    address,
+    family_income,
+  });
+
+  /* Create new token */
+  const token = jwt.sign(
+    {
+      id: req.user.id,
+      role: req.user.role,
+      school_id: req.user.school_id,
+      iat: Date.now(),
+    },
+    process.env.JWT_SECRET,
+    { expiresIn: process.env.JWT_EXPIRES_IN }
+  );
+
+  res.json({ message: "Profile completed", token, user: req.user });
 });
 
 /* STUDENT: MY PROFILE */

@@ -61,6 +61,12 @@ import ReportCardMark from "../modules/report-cards/report-card-mark.model.js";
 import Notification from "../modules/notifications/notifications.model.js";
 import NotificationAck from "../modules/notifications/notification-ack.model.js";
 
+/* ===================== GROUP CHAT ===================== */
+import GroupChat from "../modules/group-chat/group-chat.model.js";
+
+import GroupChatMember from "../modules/group-chat/group-chat-member.model.js";
+import GroupChatMessage from "../modules/group-chat/group-chat-message.model.js";
+
 
 const initAssociations = () => {
   /* ==================== SCHOOL ==================== */
@@ -86,9 +92,9 @@ const initAssociations = () => {
   /* ==================== STUDENT (LEGACY – KEEP) ==================== */
   Student.belongsTo(School, { foreignKey: "school_id" });
   Student.belongsTo(Class, {
-  foreignKey: "class_id",
-  onDelete: "SET NULL",
-});
+    foreignKey: "class_id",
+    onDelete: "SET NULL",
+  });
   Student.belongsTo(Section, { foreignKey: "section_id" });
 
   Class.hasMany(Student, { foreignKey: "class_id" });
@@ -98,7 +104,7 @@ const initAssociations = () => {
   Student.hasMany(StudentContent, { foreignKey: "student_id" });
   Student.hasMany(TopicProgress, { foreignKey: "student_id" });
 
-    /* ==================== REPORT CARDS ==================== */
+  /* ==================== REPORT CARDS ==================== */
 
   Exam.belongsTo(School, { foreignKey: "school_id" });
   Exam.belongsTo(Class, { foreignKey: "class_id" });
@@ -155,6 +161,17 @@ const initAssociations = () => {
   Timetable.belongsTo(Class, { foreignKey: "class_id" });
   Timetable.belongsTo(Teacher, { foreignKey: "teacher_id" });
   Timetable.belongsTo(Subject, { foreignKey: "subject_id" });
+  TeacherTimetable.belongsTo(Class, {
+    foreignKey: "class_id",
+  });
+
+  TeacherTimetable.belongsTo(Section, {
+    foreignKey: "section_id",
+  });
+
+  TeacherTimetable.belongsTo(Subject, {
+    foreignKey: "subject_id",
+  });
 
   /* ==================== CHAPTER / TOPIC ==================== */
   Chapter.belongsTo(Subject, { foreignKey: "subject_id" });
@@ -188,18 +205,18 @@ const initAssociations = () => {
   AiChatLog.belongsTo(User, { foreignKey: "user_id" });
   VoiceLog.belongsTo(User, { foreignKey: "user_id" });
   AiOutput.belongsTo(User, { foreignKey: "user_id" });
- 
+
   //homeworks
   Homework.belongsTo(Class, { foreignKey: "class_id" });
- Homework.belongsTo(Section, { foreignKey: "section_id" });
- Homework.belongsTo(Subject, { foreignKey: "subject_id" });
-HomeworkSubmission.belongsTo(Homework, { foreignKey: "homework_id" });
-HomeworkSubmission.belongsTo(Student, { foreignKey: "student_id" });
+  Homework.belongsTo(Section, { foreignKey: "section_id" });
+  Homework.belongsTo(Subject, { foreignKey: "subject_id" });
+  HomeworkSubmission.belongsTo(Homework, { foreignKey: "homework_id" });
+  HomeworkSubmission.belongsTo(Student, { foreignKey: "student_id" });
 
-Homework.hasMany(HomeworkSubmission, {
-  foreignKey: "homework_id",
-  onDelete: "CASCADE",
-});
+  Homework.hasMany(HomeworkSubmission, {
+    foreignKey: "homework_id",
+    onDelete: "CASCADE",
+  });
 
 
   /* ==================== TOKENS ==================== */
@@ -212,13 +229,28 @@ Homework.hasMany(HomeworkSubmission, {
   Notification.belongsTo(School, { foreignKey: "school_id" });
   Notification.belongsTo(Class, { foreignKey: "class_id" });
   NotificationAck.belongsTo(Notification, {
-  foreignKey: "notification_id",
-  onDelete: "CASCADE",
-});
+    foreignKey: "notification_id",
+    onDelete: "CASCADE",
+  });
 
-Notification.hasMany(NotificationAck, {
-  foreignKey: "notification_id",
-});
+  Notification.hasMany(NotificationAck, {
+    foreignKey: "notification_id",
+  });
+
+  /* ==================== GROUP CHAT ==================== */
+  GroupChat.hasMany(GroupChatMember, { foreignKey: "group_chat_id" });
+  GroupChatMember.belongsTo(GroupChat, { foreignKey: "group_chat_id" });
+
+  GroupChatMember.belongsTo(User, { foreignKey: "user_id" });
+
+  GroupChat.belongsTo(User, { foreignKey: "teacher_id", as: "Teacher" });
+  GroupChat.belongsTo(Subject, { foreignKey: "subject_id" });
+  GroupChat.belongsTo(Class, { foreignKey: "class_id" });
+  GroupChat.belongsTo(Section, { foreignKey: "section_id" });
+
+  GroupChat.hasMany(GroupChatMessage, { foreignKey: "group_chat_id" });
+  GroupChatMessage.belongsTo(GroupChat, { foreignKey: "group_chat_id" });
+  GroupChatMessage.belongsTo(User, { foreignKey: "sender_user_id", as: "Sender" });
 };
 
 initAssociations();

@@ -25,11 +25,13 @@ const Parent = db.define(
         model: "students",
         key: "id",
       },
-      approval_status: {
+    },
+
+ approval_status: {
   type: DataTypes.ENUM("pending", "approved", "rejected"),
   allowNull: false,
   defaultValue: "pending",
-},
+  },
 
 approved_by: {
   type: DataTypes.BIGINT,
@@ -45,7 +47,7 @@ approved_at: {
   allowNull: true,
 },
 
-    },
+  
     relation_type: {
       type: DataTypes.ENUM("mother", "father", "guardian"),
       allowNull: false,

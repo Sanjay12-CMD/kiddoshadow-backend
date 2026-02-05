@@ -15,7 +15,7 @@ export const createSchool = asyncHandler(async (req, res) => {
 
 /* LIST SCHOOLS */
 export const listSchools = asyncHandler(async (req, res) => {
-  const schools = await listSchoolsService();
+  const schools = await listSchoolsService({ query: req.query });
   res.json(schools);
 });
 

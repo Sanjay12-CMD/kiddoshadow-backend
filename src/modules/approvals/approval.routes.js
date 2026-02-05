@@ -7,6 +7,7 @@ import { listPendingApprovalsSchema } from "./approval.schema.js";
 import {
   getTeacherPendingApprovals,
   getAdminPendingApprovals,
+  approveRejectRequest,
 } from "./approval.controller.js";
 
 const router = express.Router();
@@ -22,15 +23,29 @@ router.get(
   getTeacherPendingApprovals
 );
 
+router.post(
+  "/teachers/approvals/:type/:id/:action",
+  protect,
+  allowRoles("teacher"),
+  approveRejectRequest
+);
+
 /* =========================
    ADMIN
 ========================= */
 router.get(
   "/admin/approvals/pending",
   protect,
-  allowRoles("admin"),
+  allowRoles("school_admin"),
   validate(listPendingApprovalsSchema),
   getAdminPendingApprovals
+);
+
+router.post(
+  "/admin/approvals/:type/:id/:action",
+  protect,
+  allowRoles("school_admin"),
+  approveRejectRequest
 );
 
 export default router;

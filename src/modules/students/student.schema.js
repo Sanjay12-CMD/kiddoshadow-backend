@@ -15,6 +15,17 @@ export const autoCreateStudentsSchema = z.object({
 export const completeStudentProfileSchema = z.object({
   name: z.string().min(1),
   phone: z.string().optional(),
+  email: z.string().email().optional(),
+  dob: z.string().optional(), // or z.coerce.date()
+  gender: z.enum(["male", "female", "other"]).optional(),
+  blood_group: z.string().optional(),
+  father_name: z.string().optional(),
+  mother_name: z.string().optional(),
+  guardian_name: z.string().optional(),
+  father_occupation: z.string().optional(),
+  mother_occupation: z.string().optional(),
+  address: z.string().optional(),
+  family_income: z.coerce.number().optional(),
 });
 
 /* admin: move */

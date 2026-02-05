@@ -1,7 +1,7 @@
 import express from "express";
-import {protect} from "../../shared/middlewares/auth.js";
-import {allowRoles} from "../../shared/middlewares/role.js";
-import {validate} from "../../shared/middlewares/validate.js";
+import { protect } from "../../shared/middlewares/auth.js";
+import { allowRoles } from "../../shared/middlewares/role.js";
+import { validate } from "../../shared/middlewares/validate.js";
 
 import {
   parentChildrenQuerySchema,
@@ -13,11 +13,11 @@ import { getParentDashboard } from "./parent.dashboard.controller.js";
 
 const router = express.Router();
 
-router.use(protect, allowRoles("parent"));
-
 /* parent → children list */
 router.get(
   "/parents/children",
+  protect,
+  allowRoles("parent"),
   validate(parentChildrenQuerySchema),
   getParentChildren
 );
@@ -25,6 +25,8 @@ router.get(
 /* parent → daily dashboard */
 router.get(
   "/parents/dashboard",
+  protect,
+  allowRoles("parent"),
   validate(parentDashboardSchema),
   getParentDashboard
 );

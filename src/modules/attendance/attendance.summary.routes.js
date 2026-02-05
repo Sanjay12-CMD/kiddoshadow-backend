@@ -12,6 +12,7 @@ import {
   markAttendance,
   getTeacherAttendanceSummary,
   getParentAttendanceSummary,
+  getStudentAttendanceSummary,
 } from "./attendance.summary.controller.js";
 
 const router = express.Router();
@@ -21,7 +22,7 @@ const router = express.Router();
 ========================= */
 router.post(
   "/teachers/attendance",
-    protect,
+  protect,
   allowRoles("teacher"),
   validate(markAttendanceSchema),
   markAttendance
@@ -29,7 +30,7 @@ router.post(
 
 router.get(
   "/teachers/attendance/summary",
-    protect,
+  protect,
   allowRoles("teacher"),
   validate(attendanceSummarySchema),
   getTeacherAttendanceSummary
@@ -40,10 +41,21 @@ router.get(
 ========================= */
 router.get(
   "/parents/attendance/summary",
-    protect,
+  protect,
   allowRoles("parent"),
   validate(attendanceSummarySchema),
   getParentAttendanceSummary
+);
+
+/* =========================
+   STUDENT
+========================= */
+router.get(
+  "/students/attendance/summary",
+  protect,
+  allowRoles("student"),
+  validate(attendanceSummarySchema),
+  getStudentAttendanceSummary
 );
 
 export default router;

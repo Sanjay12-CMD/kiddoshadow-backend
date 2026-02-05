@@ -11,9 +11,11 @@ export const createHomeworkSchema = z.object({
 
 /* list */
 export const listHomeworkSchema = z.object({
-  class_id: z.number().int().positive().optional(),
-  section_id: z.number().int().positive().optional(),
-  date: z.string().optional(),
+  query: z.object({
+    class_id: z.coerce.number().int().positive().optional(),
+    section_id: z.coerce.number().int().positive().optional(),
+    date: z.string().optional(),
+  }),
 });
 
 
