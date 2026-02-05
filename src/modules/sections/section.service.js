@@ -8,7 +8,6 @@ export const createSectionService = async ({
   school_id,
   class_id,
   name,
-  capacity,
 }) => {
   const cls = await Class.findOne({
     where: { id: class_id, school_id },
@@ -36,7 +35,6 @@ export const createSectionService = async ({
     school_id,
     class_id,
     name: normalizedName,
-    capacity: capacity ?? 30,
   });
 
   return { section };

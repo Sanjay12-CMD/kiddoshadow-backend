@@ -30,16 +30,6 @@ const TeacherAssignment = db.define(
       onDelete: "CASCADE",
     },
 
-    class_id: {
-      type: DataTypes.BIGINT,
-      allowNull: false,
-      references: {
-        model: "classes",
-        key: "id",
-      },
-      onDelete: "CASCADE",
-    },
-
     section_id: {
       type: DataTypes.BIGINT,
       allowNull: false,
@@ -52,7 +42,7 @@ const TeacherAssignment = db.define(
 
     subject_id: {
       type: DataTypes.BIGINT,
-      allowNull: false,
+      allowNull: true,
       references: {
         model: "subjects",
         key: "id",
@@ -63,6 +53,10 @@ const TeacherAssignment = db.define(
     is_active: {
       type: DataTypes.BOOLEAN,
       defaultValue: true,
+    },
+    is_class_teacher: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
     },
   },
   {

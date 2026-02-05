@@ -14,6 +14,7 @@ export const createTeacher = asyncHandler(async (req, res) => {
   const result = await createTeacherService({
     school_id: req.user.school_id,
     username: req.body.username,
+    password: req.body.password,
   });
 
   res.status(201).json(result);
@@ -46,10 +47,13 @@ export const updateTeacherStatus = asyncHandler(async (req, res) => {
 /* TEACHER: COMPLETE PROFILE */
 export const completeTeacherProfile = asyncHandler(async (req, res) => {
   const {
+    name,
+    phone,
+    email,
+    gender,
     designation,
     qualification,
     experience,
-    subjects,
   } = req.body;
 
   const teacher = await Teacher.findOne({
@@ -62,7 +66,7 @@ export const completeTeacherProfile = asyncHandler(async (req, res) => {
 
   // Update User details
   const user = await User.update(
-    { name, phone, email: req.body.email, first_login: false },
+    { name, phone, email, first_login: false },
     { where: { id: req.user.id }, returning: true, plain: true }
   ).then(() => User.findByPk(req.user.id)); // Fetch updated user for token
 
@@ -72,7 +76,6 @@ export const completeTeacherProfile = asyncHandler(async (req, res) => {
     designation,
     qualification,
     experience,
-    subjects, // Save subjects array
   });
 
   /* Create new token */

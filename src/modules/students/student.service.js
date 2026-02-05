@@ -4,65 +4,107 @@ import Class from "../classes/classes.model.js";
 import Section from "../sections/section.model.js";
 import AppError from "../../shared/appError.js";
 import { getPagination } from "../../shared/utils/pagination.js";
-import { assertSectionCapacity } from "./student.capacity.js";
+import db from "../../config/db.js";
 
 /* =========================
-   ADMIN: AUTO CREATE
+   ADMIN:  CREATE STDUENT
 ========================= */
-export const autoCreateStudentsService = async ({
+export const createStudentService = async ({
   school_id,
   class_id,
-  sections,
+  section_id,
 }) => {
-  const created = [];
+  if (!section_id || !class_id) {
+    throw new AppError("class_id and section_id are required", 400);
+  }
 
-  for (const { section_id, count } of sections) {
+  return db.transaction(async (t) => {
+    /**
+     * 1️⃣ Validate section
+     */
     const section = await Section.findOne({
-      where: { id: section_id, class_id, school_id },
+      where: {
+        id: section_id,
+        class_id,
+        school_id,
+        is_active: true,
+      },
+      transaction: t,
+      lock: t.LOCK.UPDATE,
     });
 
     if (!section) {
-      throw new AppError("Section not found", 404);
+      throw new AppError("Section not found or inactive", 404);
     }
 
-    for (let i = 1; i <= count; i++) {
-      const roll = String(i).padStart(3, "0");
-      const username = `${class_id}${section.name}${roll}`;
+    /**
+     * 2️⃣ Generate serial (school-level, consistent with bulk)
+     */
+    const baseSerial = await Student.count({
+      where: { school_id },
+      transaction: t,
+    });
 
-      const exists = await User.findOne({
-        where: { school_id, username },
-      });
-      if (exists) {
-        throw new AppError(`Student ${username} already exists`, 409);
-      }
+    const serial = baseSerial + 1;
+    const username = `STU-${school_id}-${section_id}-${String(serial).padStart(3, "0")}`;
+    const password = `${username}@123`;
 
-      const user = await User.create({
+    /**
+     * 3️⃣ Ensure username uniqueness
+     */
+    const exists = await User.findOne({
+      where: { school_id, username },
+      transaction: t,
+    });
+
+    if (exists) {
+      throw new AppError("Generated username already exists", 409);
+    }
+
+    /**
+     * 4️⃣ Create user
+     */
+    const user = await User.create(
+      {
         role: "student",
         school_id,
         username,
-        password: username,
+        password,
         first_login: true,
         is_active: true,
         name: "Student",
-      });
-  
-      await assertSectionCapacity({ section_id });
-      const student = await Student.create({
+      },
+      { transaction: t }
+    );
+
+    /**
+     * 5️⃣ Create student profile
+     */
+    const student = await Student.create(
+      {
         user_id: user.id,
         school_id,
         class_id,
         section_id,
-        roll_no: roll,
+        admission_no: `ADM-${username}`,
+        approval_status: "pending",
         is_active: true,
-      });
+      },
+      { transaction: t }
+    );
 
-      created.push({ username, student_id: student.id });
-    }
-  }
-
-  return created;
+    /**
+     * 6️⃣ Return minimal response
+     */
+    return {
+      student_id: student.id,
+      username,
+      class_id,
+      section_id,
+      password_hint: "username@123",
+    };
+  });
 };
-
 /* =========================
    ADMIN: LIST
 ========================= */
@@ -155,7 +197,7 @@ export const assignStudentsToSectionService = async ({
       return { error: "SECTION_NOT_FOUND" };
     }
 
-    // 3. Update students
+    // Update students
     for (const s of students) {
       await Student.update(
         {

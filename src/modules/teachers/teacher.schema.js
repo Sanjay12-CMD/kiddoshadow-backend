@@ -3,6 +3,7 @@ import { z } from "zod";
 /* admin: create teacher */
 export const createTeacherSchema = z.object({
   username: z.string().min(3),
+  password: z.string().min(6),
 });
 
 /* admin: status */
@@ -19,5 +20,4 @@ export const completeTeacherProfileSchema = z.object({
   qualification: z.string().optional(),
   experience: z.coerce.number().int().nonnegative().optional(),
   email: z.string().email().optional(),
-  subjects: z.array(z.string()).optional(), // Array of subject names
 });

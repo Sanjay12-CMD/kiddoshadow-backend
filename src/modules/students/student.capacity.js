@@ -1,3 +1,4 @@
+import { Op } from "sequelize";
 import Student from "./student.model.js";
 import Section from "../sections/section.model.js";
 import AppError from "../../shared/appError.js";

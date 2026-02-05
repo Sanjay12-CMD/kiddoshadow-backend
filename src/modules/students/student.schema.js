@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /* admin: auto create */
-export const autoCreateStudentsSchema = z.object({
+export const createStudentSchema = z.object({
   class_id: z.number(),
   sections: z.array(
     z.object({

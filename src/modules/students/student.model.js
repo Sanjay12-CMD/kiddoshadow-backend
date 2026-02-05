@@ -37,6 +37,15 @@ const Student = db.define(
       },
     },
 
+    section_id: {
+      type: DataTypes.BIGINT,
+      allowNull: true,
+      references: {
+        model: "sections",
+        key: "id",
+      },
+    },
+
     admission_no: {
       type: DataTypes.STRING,
       allowNull: false,
@@ -89,10 +98,10 @@ const Student = db.define(
         key: "id",
       },
     },
-  rejection_reason: {
-  type: DataTypes.TEXT,
-  allowNull: true,
-},
+    rejection_reason: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
     approved_at: {
       type: DataTypes.DATE,
       allowNull: true,

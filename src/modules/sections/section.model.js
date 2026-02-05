@@ -42,12 +42,6 @@ const Section = db.define(
       allowNull: false,
     },
 
-    capacity: {
-      type: DataTypes.INTEGER,
-      allowNull: false,
-      defaultValue: 30,
-    },
-
     is_active: {
       type: DataTypes.BOOLEAN,
       defaultValue: true,

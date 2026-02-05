@@ -5,45 +5,65 @@ import User from "../users/user.model.js";
 import Teacher from "../teachers/teacher.model.js";
 import Student from "../students/student.model.js";
 import Parent from "../parents/parent.model.js";
-// School import removed as it is not used directly in creation logic here
-import AppError from "../../shared/appError.js";
+import AppError from "../../shared/appError.js";  
 
-function generateUsername(prefix, index) {
-  // Use a simpler unique suffix to ensure uniqueness within the batch and generally
-  // Random 4 digit number + timestamp subset
-  const suffix = Math.floor(1000 + Math.random() * 9000);
-  return `${prefix}_${Date.now().toString().slice(-6)}${suffix}_${index}`;
-}
+const buildTeacherUsername = (schoolId, serial) =>
+  `TCH-${schoolId}-${String(serial).padStart(3, "0")}`;
 
-function generateDefaultPassword(username) {
-  return `${username}@123`;
-}
+const buildStudentUsername = (schoolId, sectionId, serial) =>
+  `STU-${schoolId}-${sectionId}-${String(serial).padStart(3, "0")}`;
 
+const buildParentUsername = (schoolId, studentId) =>
+  `PAR-${schoolId}-${studentId}`;
+
+const defaultPassword = (username) => `${username}@123`;
+
+/**
+ * BULK CREATE SERVICE
+ */
 export const bulkCreateDataService = async ({
   school_id,
   classes,
-  teacher_count,
-  students_per_section,
+  teacher_count = 10,
+  students_per_section = 20,
 }) => {
   return db.transaction(async (t) => {
-    // 1. Create Teachers
-    const createdTeachers = [];
-    const teacherCount = Number(teacher_count) || 50;
-    const defaultStudentCount = Number(students_per_section) || 20;
+    /* ================================
+       RESPONSE STRUCTURE
+    ================================= */
+    const response = {
+      school_id,
+      teachers: [],
+      students: [],
+      parents: [],
+      summary: {
+        classes_created: 0,
+        teachers_created: 0,
+        students_created: 0,
+      },
+    };
 
-    for (let i = 0; i < teacherCount; i++) {
-      const username = generateUsername("TCH", i);
-      const password = generateDefaultPassword(username);
+    /* ================================
+       1️⃣ CREATE TEACHERS
+    ================================= */
+    const existingTeacherCount = await Teacher.count({
+      where: { school_id },
+      transaction: t,
+    });
+
+    for (let i = 1; i <= teacher_count; i++) {
+      const serial = existingTeacherCount + i;
+      const username = buildTeacherUsername(school_id, serial);
 
       const user = await User.create(
         {
           school_id,
           role: "teacher",
           username,
-          password,
-          name: `Teacher ${i + 1}`,
+          password: defaultPassword(username),
           is_active: true,
           first_login: true,
+          name: `Teacher ${serial}`,
         },
         { transaction: t }
       );
@@ -52,152 +72,155 @@ export const bulkCreateDataService = async ({
         {
           user_id: user.id,
           school_id,
-          employee_id: `EMP_${username}`, // simple employee id generation
+          employee_id: `EMP-${username}`,
           joining_date: new Date(),
+          approval_status: "pending",
           is_active: true,
         },
         { transaction: t }
       );
-      createdTeachers.push(teacher);
+
+      response.teachers.push({
+        teacher_id: teacher.id,
+        username,
+      });
+
+      response.summary.teachers_created++;
     }
 
-    // 2. Process Classes & Sections & Students & Parents
+    /* ================================
+       2️⃣ NORMALIZE CLASS INPUT
+    ================================= */
     let classEntries = [];
+
     if (Array.isArray(classes)) {
-      classEntries = classes.map((c) => {
-        if (typeof c === 'string') {
-          return {
-            name: c,
-            sections: [{ name: "Section A", students: defaultStudentCount }]
-          };
-        }
-        return {
-          name: c.name || "Unnamed",
-          sections: Array.isArray(c.sections) ? c.sections : [{ name: "Section A", students: defaultStudentCount }],
-        };
-      });
+      classEntries = classes.map((c) =>
+        typeof c === "string"
+          ? { name: c, sections: [{ name: "A", students: students_per_section }] }
+          : {
+              name: c.name,
+              sections: c.sections || [{ name: "A", students: students_per_section }],
+            }
+      );
     } else if (classes && typeof classes === "object") {
-      classEntries = Object.entries(classes).map(([name, config]) => ({
+      classEntries = Object.entries(classes).map(([name, cfg]) => ({
         name,
-        sections: Array.isArray(config.sections) ? config.sections : [{ name: "Section A", students: defaultStudentCount }],
+        sections: cfg.sections || [{ name: "A", students: students_per_section }],
       }));
     }
 
-    const details = [];
-    let classesCreatedCount = 0;
-    let studentsCreatedCount = 0;
-
+    /* ================================
+       3️⃣ CREATE CLASSES, SECTIONS,
+           STUDENTS & PARENTS
+    ================================= */
     for (const classData of classEntries) {
-      // Create Class
       const newClass = await Class.create(
         {
           school_id,
           class_name: classData.name,
-          capacity: 30, // Default capacity
         },
         { transaction: t }
       );
-      classesCreatedCount++;
 
-      const sectionDetails = [];
+      response.summary.classes_created++;
 
       for (const sectionData of classData.sections) {
-        // Create Section
         const newSection = await Section.create(
           {
             school_id,
             class_id: newClass.id,
             name: sectionData.name,
-            capacity: 30,
+            is_active: true,
           },
           { transaction: t }
         );
 
-        const studentCount = Number(sectionData.students) || 0;
-        studentsCreatedCount += studentCount;
+        const existingStudentCount = await Student.count({
+          where: { school_id },
+          transaction: t,
+        });
 
-        // Create Students for this Section
-        for (let k = 0; k < studentCount; k++) {
-          const sUsername = generateUsername("STO", k);
-          const sPassword = generateDefaultPassword(sUsername);
+        for (let i = 1; i <= sectionData.students; i++) {
+          const serial = existingStudentCount + response.summary.students_created + 1;
+          const stuUsername = buildStudentUsername(
+            school_id,
+            newSection.id,
+            serial
+          );
 
-          // Create Student User
-          const sUser = await User.create(
+          const stuUser = await User.create(
             {
               school_id,
               role: "student",
-              username: sUsername,
-              password: sPassword,
-              name: `Student ${classData.name} ${sectionData.name} ${k + 1}`,
+              username: stuUsername,
+              password: defaultPassword(stuUsername),
               is_active: true,
               first_login: true,
+              name: `Student ${classData.name}${sectionData.name}-${i}`,
             },
             { transaction: t }
           );
 
-          // Create Student Profile
-          const newStudent = await Student.create(
+          const student = await Student.create(
             {
-              user_id: sUser.id,
+              user_id: stuUser.id,
               school_id,
               class_id: newClass.id,
-              section_id: newSection.id, // Fixed: Assigning section_id
-              admission_no: `ADM_${sUsername}`,
-              approval_status: "pending", // Needs profile completion
-              family_income: 0, // Default
+              section_id: newSection.id,
+              admission_no: `ADM-${stuUsername}`,
+              approval_status: "pending",
+              is_active: true,
             },
             { transaction: t }
           );
 
-          // Create Parent for this Student
-          const pUsername = generateUsername("PAR", k);
-          const pPassword = generateDefaultPassword(pUsername);
+          response.students.push({
+            student_id: student.id,
+            username: stuUsername,
+            class: classData.name,
+            section: sectionData.name,
+          });
 
-          // Create Parent User
-          const pUser = await User.create(
+          /* ================================
+             CREATE PARENT (1:1 DEFAULT)
+          ================================= */
+          const parUsername = buildParentUsername(school_id, student.id);
+
+          const parUser = await User.create(
             {
-              school_id, // Linked to school? Model says AllowNull: true, but commonly linked.
+              school_id,
               role: "parent",
-              username: pUsername,
-              password: pPassword,
-              name: `Parent of ${sUser.name}`,
+              username: parUsername,
+              password: defaultPassword(parUsername),
               is_active: true,
               first_login: true,
+              name: `Parent of ${stuUser.name}`,
             },
             { transaction: t }
           );
 
-          // Create Parent Profile
-          await Parent.create(
+          const parent = await Parent.create(
             {
-              user_id: pUser.id,
-              student_id: newStudent.id,
-              relation_type: "guardian", // Default
+              user_id: parUser.id,
+              student_id: student.id,
+              relation_type: "guardian",
               approval_status: "pending",
+              is_active: true,
             },
             { transaction: t }
           );
+
+          response.parents.push({
+            parent_id: parent.id,
+            username: parUsername,
+            student_id: student.id,
+          });
+
+          response.summary.students_created++;
         }
-
-        sectionDetails.push({
-          name: newSection.name,
-          students: studentCount,
-        });
       }
-
-      details.push({
-        name: newClass.class_name,
-        teachers_allocated: 0, // Logic for allocation not specified, keeping 0 for now as per previous stub
-        sections: sectionDetails,
-      });
     }
 
-    return {
-      school_id,
-      classes_created: classesCreatedCount,
-      teachers_created: teacherCount,
-      students_created: studentsCreatedCount,
-      details,
-    };
+    return response;
   });
 };

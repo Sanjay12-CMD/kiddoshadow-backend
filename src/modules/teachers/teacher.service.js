@@ -1,3 +1,4 @@
+import db from "../../config/db.js";
 import User from "../users/user.model.js";
 import Teacher from "./teacher.model.js";
 import AppError from "../../shared/appError.js";
@@ -6,41 +7,74 @@ import { getPagination } from "../../shared/utils/pagination.js";
 /* =========================
    ADMIN: CREATE TEACHER
 ========================= */
-export const createTeacherService = async ({ school_id, username }) => {
-  const exists = await User.findOne({
-    where: { school_id, username },
+export const createTeacherService = async ({ school_id }) => {
+  return db.transaction(async (t) => {
+    /**
+     * 1️⃣ Get next serial (school-level)
+     */
+    const count = await Teacher.count({
+      where: { school_id },
+      transaction: t,
+    });
+
+    const serial = count + 1;
+    const username = `TCH-${school_id}-${String(serial).padStart(3, "0")}`;
+    const password = `${username}@123`;
+
+    /**
+     * 2️⃣ Safety check (extremely unlikely, but correct)
+     */
+    const exists = await User.findOne({
+      where: { school_id, username },
+      transaction: t,
+    });
+
+    if (exists) {
+      throw new AppError("Generated teacher username already exists", 409);
+    }
+
+    /**
+     * 3️⃣ Create user
+     */
+    const user = await User.create(
+      {
+        role: "teacher",
+        school_id,
+        username,
+        password,
+        first_login: true,
+        is_active: true,
+        name: "Teacher",
+      },
+      { transaction: t }
+    );
+
+    /**
+     * 4️⃣ Create teacher profile
+     */
+    const teacher = await Teacher.create(
+      {
+        user_id: user.id,
+        school_id,
+        employee_id: `EMP-${username}`,
+        joining_date: new Date(),
+        approval_status: "pending",
+        is_active: true,
+      },
+      { transaction: t }
+    );
+
+    /**
+     * 5️⃣ Return admin-safe response
+     */
+    return {
+      teacher_id: teacher.id,
+      username,
+      employee_id: teacher.employee_id,
+      password_hint: "username@123",
+    };
   });
-
-  if (exists) {
-    throw new AppError("Username already exists", 409);
-  }
-  // generate employee id (simple + safe)
-  const count = await Teacher.count({ where: { school_id } });
-  const employee_id = `EMP${String(count + 1).padStart(4, "0")}`;
-
-  const user = await User.create({
-    role: "teacher",
-    school_id,
-    username,
-    password: username,
-    first_login: true,
-    is_active: true,
-    name: "Teacher",
-  });
-
-  const teacher = await Teacher.create({
-    user_id: user.id,
-    school_id,
-    employee_id,
-    joining_date: new Date(),
-  });
-
-  return {
-    username: user.username,
-    employee_id: teacher.employee_id,
-  };
 };
-
 /* =========================
    ADMIN: LIST TEACHERS
 ========================= */

@@ -9,25 +9,53 @@ import AppError from "../../shared/appError.js";
 ========================= */
 export const createParentAndLinkService = async ({
   school_id,
-  username,
-  links,
+  student_id,
+  relation_type = "guardian",
 }) => {
+  if (!student_id) {
+    throw new AppError("student_id is required", 400);
+  }
+
   return db.transaction(async (t) => {
-    const exists = await User.findOne({
-      where: { username, school_id },
+    /**
+     * 1️⃣ Validate student
+     */
+    const student = await Student.findOne({
+      where: { id: student_id, school_id },
       transaction: t,
     });
 
-    if (exists) {
-      throw new AppError("Username already exists", 409);
+    if (!student) {
+      throw new AppError("Student not found", 404);
     }
 
+    /**
+     * 2️⃣ Generate deterministic username
+     */
+    const username = `PAR-${school_id}-${student_id}`;
+    const password = `${username}@123`;
+
+    /**
+     * 3️⃣ Ensure parent user does not already exist
+     */
+    const existingUser = await User.findOne({
+      where: { school_id, username },
+      transaction: t,
+    });
+
+    if (existingUser) {
+      throw new AppError("Parent already exists for this student", 409);
+    }
+
+    /**
+     * 4️⃣ Create parent user
+     */
     const user = await User.create(
       {
         role: "parent",
         school_id,
         username,
-        password: username,
+        password,
         first_login: true,
         is_active: true,
         name: "Parent",
@@ -35,43 +63,47 @@ export const createParentAndLinkService = async ({
       { transaction: t }
     );
 
-    for (const { student_id, relation_type } of links) {
-      const student = await Student.findOne({
-        where: { id: student_id, school_id },
-        transaction: t,
-      });
+    /**
+     * 5️⃣ Create parent profile + link
+     */
+    const parent = await Parent.create(
+      {
+        user_id: user.id,
+        student_id,
+        relation_type,
+        approval_status: "pending",
+        is_active: true,
+      },
+      { transaction: t }
+    );
 
-      if (!student) {
-        throw new AppError(`Student ${student_id} not found`, 404);
-      }
-
-      await Parent.create(
-        {
-          user_id: user.id,
-          student_id,
-          relation_type,
-        },
-        { transaction: t }
-      );
-    }
-
+    /**
+     * 6️⃣ Return admin-safe response
+     */
     return {
-      user_id: user.id,
-      username: user.username,
-      linked_students: links,
+      parent_id: parent.id,
+      username,
+      student_id,
+      relation_type,
+      password_hint: "username@123",
     };
   });
 };
-
 /* =========================
    ADMIN: LINK EXISTING PARENT
 ========================= */
 export const linkExistingParentService = async ({
   parent_user_id,
   student_id,
-  relation_type,
+  relation_type = "guardian",
   school_id,
 }) => {
+
+  const allowedRelations = ["mother", "father", "guardian"];
+
+  if (!allowedRelations.includes(relation_type)) {
+    throw new AppError("Invalid relation_type", 400);
+  }
   return db.transaction(async (t) => {
     const user = await User.findOne({
       where: { id: parent_user_id, role: "parent", school_id },

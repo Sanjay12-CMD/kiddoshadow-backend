@@ -23,21 +23,6 @@ const Class = db.define(
       type: DataTypes.STRING,
       allowNull: false,
     },
-
-    capacity: {
-      type: DataTypes.INTEGER,
-      allowNull: false,
-      defaultValue: 30,
-    },
-
-    class_teacher_id: {
-      type: DataTypes.BIGINT,
-      allowNull: true,
-      references: {
-        model: "teachers",
-        key: "id",
-      },
-    },
   },
   {
     tableName: "classes",

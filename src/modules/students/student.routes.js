@@ -6,7 +6,7 @@ import { validate } from "../../shared/middlewares/validate.js";
 
 
 import {
-  autoCreateStudents,
+  createStudent,
   listStudents,
   moveStudent,
   updateStudentStatus,
@@ -16,7 +16,7 @@ import {
 } from "./student.controller.js";
 
 import {
-  autoCreateStudentsSchema,
+  createStudentSchema,
   completeStudentProfileSchema,
   moveStudentSchema,
   updateStudentStatusSchema,
@@ -39,9 +39,9 @@ router.get("/me", protect, getMyProfile);
 router.use(protect, allowRoles("school_admin"));
 
 router.post(
-  "/auto-create",
-  validate(autoCreateStudentsSchema),
-  autoCreateStudents
+  "/",
+  validate(createStudentSchema),
+  createStudent
 );
 
 router.get("/", listStudents);

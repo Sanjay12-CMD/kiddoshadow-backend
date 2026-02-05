@@ -60,12 +60,6 @@ const Teacher = db.define(
       defaultValue: "pending",
     },
 
-    subjects: {
-      type: DataTypes.JSON, // Stores array of subject names/details
-      allowNull: true,
-      defaultValue: [],
-    },
-
     approved_by: {
       type: DataTypes.BIGINT,
       allowNull: true,

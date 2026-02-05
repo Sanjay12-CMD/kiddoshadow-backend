@@ -2,7 +2,7 @@ import asyncHandler from "../../shared/asyncHandler.js";
 import jwt from "jsonwebtoken";
 import AppError from "../../shared/appError.js";
 import {
-  autoCreateStudentsService,
+ createStudentService,
   listStudentsService,
   moveStudentService,
   updateStudentStatusService,
@@ -11,8 +11,8 @@ import Student from "./student.model.js";
 import User from "../users/user.model.js";
 
 /* ADMIN: AUTO CREATE */
-export const autoCreateStudents = asyncHandler(async (req, res) => {
-  const result = await autoCreateStudentsService({
+export const createStudent = asyncHandler(async (req, res) => {
+  const result = await createStudentService({
     school_id: req.user.school_id,
     class_id: req.body.class_id,
     sections: req.body.sections,
