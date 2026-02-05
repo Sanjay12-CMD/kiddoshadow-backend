@@ -1,6 +1,7 @@
 import asyncHandler from "../../shared/asyncHandler.js";
 import * as service from "./teacher-assignment.service.js";
 
+/* ADMIN: CREATE ASSIGNMENT */
 export const assignTeacher = asyncHandler(async (req, res) => {
   const assignment = await service.assignTeacher({
     schoolId: req.user.school_id,
@@ -8,7 +9,81 @@ export const assignTeacher = asyncHandler(async (req, res) => {
     classId: req.body.class_id,
     sectionId: req.body.section_id,
     subjectId: req.body.subject_id,
+    isClassTeacher: req.body.is_class_teacher,
   });
 
-  res.status(201).json(assignment);
+  res.status(201).json({
+    success: true,
+    data: assignment,
+  });
 });
+
+/* ADMIN: LIST ALL ASSIGNMENTS */
+export const listAssignments = asyncHandler(async (req, res) => {
+  const result = await service.listAssignments({
+    schoolId: req.user.school_id,
+    query: req.query,
+  });
+
+  res.json({
+    success: true,
+    total: result.count,
+    items: result.rows,
+  });
+});
+
+/* TEACHER/ADMIN: GET TEACHER'S ASSIGNMENTS */
+export const getTeacherAssignments = asyncHandler(async (req, res) => {
+  const teacherId = req.params.teacherId || req.user.teacher_id;
+
+  const assignments = await service.getTeacherAssignments({
+    schoolId: req.user.school_id,
+    teacherId,
+  });
+
+  res.json({
+    success: true,
+    data: assignments,
+  });
+});
+
+/* ADMIN: GET SECTION ASSIGNMENTS */
+export const getSectionAssignments = asyncHandler(async (req, res) => {
+  const assignments = await service.getSectionAssignments({
+    schoolId: req.user.school_id,
+    sectionId: req.params.sectionId,
+  });
+
+  res.json({
+    success: true,
+    data: assignments,
+  });
+});
+
+/* ADMIN: UPDATE ASSIGNMENT */
+export const updateAssignment = asyncHandler(async (req, res) => {
+  const assignment = await service.updateAssignment({
+    schoolId: req.user.school_id,
+    assignmentId: req.params.id,
+    updates: req.body,
+  });
+
+  res.json({
+    success: true,
+    data: assignment,
+  });
+});
+
+/* ADMIN: DELETE ASSIGNMENT */
+export const deleteAssignment = asyncHandler(async (req, res) => {
+  const result = await service.deleteAssignment({
+    schoolId: req.user.school_id,
+    assignmentId: req.params.id,
+  });
+
+  res.json({
+    success: true,
+    message: result.message,
+  });
+});
+

@@ -62,6 +62,7 @@ const TeacherAssignment = db.define(
   {
     tableName: "teacher_assignments",
     underscored: true,
+    timestamps: true,
     indexes: [
       { fields: ["school_id"] },
       { fields: ["teacher_id"] },
