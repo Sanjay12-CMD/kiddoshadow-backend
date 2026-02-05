@@ -1,3 +1,4 @@
+import asyncHandler from "../../shared/asyncHandler.js";
 import {
   markAttendanceService,
   getTeacherAttendanceSummaryService,
@@ -8,73 +9,60 @@ import {
 /* =========================
    TEACHER: MARK
 ========================= */
-export const markAttendance = async (req, res, next) => {
-  try {
-    const result = await markAttendanceService({
-      school_id: req.user.school_id,
-      teacher_user_id: req.user.id,
-      ...req.body,
-    });
+export const markAttendance = asyncHandler(async (req, res) => {
+  await markAttendanceService({
+    user: req.user,
+    school_id: req.user.school_id,
+    ...req.body,
+  });
 
-    res.status(201).json(result);
-  } catch (e) {
-    next(e);
-  }
-};
+  res.status(201).json({
+    success: true,
+    message: "Attendance marked successfully",
+  });
+});
 
 /* =========================
    TEACHER: SUMMARY
 ========================= */
-export const getTeacherAttendanceSummary = async (req, res, next) => {
-  try {
-    const result = await getTeacherAttendanceSummaryService({
-      school_id: req.user.school_id,
-      query: req.query,
-    });
+export const getTeacherAttendanceSummary = asyncHandler(async (req, res) => {
+  const result = await getTeacherAttendanceSummaryService({
+    school_id: req.user.school_id,
+    query: req.query,
+  });
 
-    res.json({
-      total: result.count,
-      items: result.rows,
-    });
-  } catch (e) {
-    next(e);
-  }
-};
+  res.json({
+    total: result.count,
+    items: result.rows,
+  });
+});
 
 /* =========================
    PARENT: SUMMARY
 ========================= */
-export const getParentAttendanceSummary = async (req, res, next) => {
-  try {
-    const result = await getParentAttendanceSummaryService({
-      parent_user_id: req.user.id,
-      query: req.query,
-    });
+export const getParentAttendanceSummary = asyncHandler(async (req, res) => {
+  const result = await getParentAttendanceSummaryService({
+    parent_user_id: req.user.id,
+    query: req.query,
+  });
 
-    res.json({
-      total: result.count,
-      items: result.rows,
-    });
-  } catch (e) {
-    next(e);
-  }
-};
+  res.json({
+    total: result.count,
+    items: result.rows,
+  });
+});
 
 /* =========================
    STUDENT: SUMMARY
 ========================= */
-export const getStudentAttendanceSummary = async (req, res, next) => {
-  try {
-    const result = await getStudentAttendanceSummaryService({
-      student_user_id: req.user.id,
-      query: req.query,
-    });
+export const getStudentAttendanceSummary = asyncHandler(async (req, res) => {
+  const result = await getStudentAttendanceSummaryService({
+    student_user_id: req.user.id,
+    query: req.query,
+  });
 
-    res.json({
-      total: result.count,
-      items: result.rows,
-    });
-  } catch (e) {
-    next(e);
-  }
-};
+  res.json({
+    total: result.count,
+    items: result.rows,
+  });
+});

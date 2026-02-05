@@ -3,24 +3,25 @@ import * as service from "./teacher-class-session.service.js";
 
 export const startClass = asyncHandler(async (req, res) => {
   const session = await service.startSession({
-    schoolId: req.user.school_id,
-    teacherId: req.user.id,
-    classId: req.body.class_id,
-    sectionId: req.body.section_id,
-    subjectId: req.body.subject_id,
+    user: req.user,
+    school_id: req.user.school_id,
+    ...req.body,
   });
 
-  res.status(201).json(session);
+  res.status(201).json({
+    success: true,
+    data: session,
+  });
 });
 
 export const endClass = asyncHandler(async (req, res) => {
-  const session = await service.endSession(
-    req.params.id
-  );
+  const session = await service.endSession({
+    session_id: Number(req.params.id),
+    user: req.user,
+  });
 
-  if (!session) {
-    return res.status(400).json({ message: "Invalid session" });
-  }
-
-  res.json(session);
+  res.json({
+    success: true,
+    data: session,
+  });
 });

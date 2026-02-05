@@ -1,17 +1,13 @@
 import { z } from "zod";
 
 export const markAttendanceSchema = z.object({
-  body: z.object({
-    class_id: z.number().int(),
-    section_id: z.number().int(),
-    date: z.string(),
-    records: z.array(
-      z.object({
-        student_id: z.number().int(),
-        status: z.enum(["present", "absent", "leave"]),
-      })
-    ).min(1),
-  }),
+  teacher_class_session_id: z.number().int().positive(),
+  records: z.array(
+    z.object({
+      student_id: z.number().int().positive(),
+      status: z.enum(["present", "absent", "leave"]),
+    })
+  ).min(1),
 });
 
 export const attendanceSummarySchema = z.object({

@@ -10,7 +10,7 @@ import Teacher from "../modules/teachers/teacher.model.js";
 import Parent from "../modules/parents/parent.model.js";
 import Student from "../modules/students/student.model.js";
 import TeacherClassSession from "../modules/teacher-class-sessions/teacher-class-session.model.js";
-import TeacherSectionAssignment from "../modules/teacher-assignments/teacher-assignment.model.js";
+import TeacherAssignment from "../modules/teacher-assignments/teacher-assignment.model.js";
 
 
 /* ===================== ACADEMICS ===================== */
@@ -36,7 +36,6 @@ import PlayerAnswer from "../modules/game/player-answer.model.js";
 
 /* ===================== AI / LOGS ===================== */
 import AiChatLog from "../modules/ai-chat-logs/ai-chat-log.model.js";
-import AiOutput from "../modules/ai-outputs/ai-outputs.model.js";
 import VoiceLog from "../modules/voice-logs/voice-log.model.js";
 
 /* ===================== TOKENS / BILLING ===================== */
@@ -50,7 +49,7 @@ import ReportCard from "../modules/report-cards/report-card.model.js";
 import ReportCardMark from "../modules/report-cards/report-card-mark.model.js";
 
 /* ===================== MISC ===================== */
-import Notification from "../modules/notifications/notifications.model.js";
+import Notification from "../modules/notifications/notification.model.js";
 import NotificationAck from "../modules/notifications/notification-ack.model.js";
 
 /* ===================== GROUP CHAT ===================== */
@@ -95,14 +94,14 @@ const initAssociations = () => {
   Student.hasMany(Attendance, { foreignKey: "student_id" });
 
   /* ==================== REPORT CARDS ==================== */
-
   Exam.belongsTo(School, { foreignKey: "school_id" });
   Exam.belongsTo(Class, { foreignKey: "class_id" });
+  Exam.hasMany(ReportCard, { foreignKey: "exam_id" });
 
+  ReportCard.belongsTo(School, { foreignKey: "school_id" });
   ReportCard.belongsTo(Student, { foreignKey: "student_id" });
   ReportCard.belongsTo(Class, { foreignKey: "class_id" });
   ReportCard.belongsTo(Exam, { foreignKey: "exam_id" });
-
   ReportCard.hasMany(ReportCardMark, {
     foreignKey: "report_card_id",
     onDelete: "CASCADE",
@@ -130,26 +129,54 @@ const initAssociations = () => {
     otherKey: "student_id",
   });
 
+  /* ==================== TEACHER CLASS SESSION ==================== */
+  TeacherClassSession.belongsTo(School, { foreignKey: "school_id" });
+  TeacherClassSession.belongsTo(TeacherAssignment, { foreignKey: "teacher_assignment_id" });
+  TeacherClassSession.belongsTo(Timetable, { foreignKey: "timetable_id" });
+
+  // Reverse associations
+  TeacherAssignment.hasMany(TeacherClassSession, { foreignKey: "teacher_assignment_id" });
+  Timetable.hasMany(TeacherClassSession, { foreignKey: "timetable_id" });
+
   /* ==================== TEACHER ==================== */
   Teacher.belongsTo(School, { foreignKey: "school_id" });
+  Teacher.belongsTo(User, { foreignKey: "user_id" });
   Teacher.hasMany(Class, { foreignKey: "class_teacher_id" });
-  Teacher.hasMany(TeacherClassSession, { foreignKey: "teacher_id" });
-  Teacher.hasMany(TeacherSectionAssignment, { foreignKey: "teacher_id" });
+  Teacher.hasMany(TeacherAssignment, { foreignKey: "teacher_id" });
 
+
+  /* ==================== ATTENDANCE ==================== */
+  Attendance.belongsTo(School, { foreignKey: "school_id" });
+  Attendance.belongsTo(Student, { foreignKey: "student_id" });
+  Attendance.belongsTo(TeacherClassSession, { foreignKey: "teacher_class_session_id" });
+  Attendance.belongsTo(User, { foreignKey: "marked_by" });
+
+  // Reverse associations
+  Student.hasMany(Attendance, { foreignKey: "student_id" });
+  TeacherClassSession.hasMany(Attendance, { foreignKey: "teacher_class_session_id" });
 
   /* ==================== CLASS ==================== */
   Class.belongsTo(School, { foreignKey: "school_id" });
   Class.belongsTo(Teacher, { foreignKey: "class_teacher_id" });
   Class.hasMany(Attendance, { foreignKey: "class_id" });
   Class.hasMany(Section, { foreignKey: "class_id" });
+  Class.hasMany(Timetable, { foreignKey: "class_id" });
 
   /* ==================== SUBJECT ==================== */
   Subject.belongsTo(School, { foreignKey: "school_id" });
 
+  /* ==================== SECTION ==================== */
+  Section.hasMany(Timetable, { foreignKey: "section_id" });
+
+  /* ==================== TEACHER ASSIGNMENTS ==================== */
+  TeacherAssignment.hasMany(Timetable, {
+    foreignKey: "teacher_assignment_id",
+  });
+
   /* ==================== TIMETABLE ==================== */
   Timetable.belongsTo(Class, { foreignKey: "class_id" });
   Timetable.belongsTo(Section, { foreignKey: "section_id" });
-  Timetable.belongsTo(TeacherSectionAssignment, { foreignKey: "teacher_assignment_id" });
+  Timetable.belongsTo(TeacherAssignment, { foreignKey: "teacher_assignment_id" });
 
 
   /* ==================== CHAPTER / TOPIC (REMOVED - UNUSED) ==================== */
@@ -178,12 +205,20 @@ const initAssociations = () => {
   /* ==================== AI / LOGS ==================== */
   AiChatLog.belongsTo(User, { foreignKey: "user_id" });
   VoiceLog.belongsTo(User, { foreignKey: "user_id" });
-  AiOutput.belongsTo(User, { foreignKey: "user_id" });
 
-  //homeworks
+
+  /* ==================== HOMEWORK ==================== */
   Homework.belongsTo(Class, { foreignKey: "class_id" });
   Homework.belongsTo(Section, { foreignKey: "section_id" });
   Homework.belongsTo(Subject, { foreignKey: "subject_id" });
+  Homework.belongsTo(TeacherAssignment, { foreignKey: "teacher_assignment_id" });
+  Homework.belongsTo(User, { foreignKey: "created_by" });
+  Homework.hasMany(HomeworkSubmission, { foreignKey: "homework_id" });
+
+  // Reverse associations
+  Class.hasMany(Homework, { foreignKey: "class_id" });
+  Section.hasMany(Homework, { foreignKey: "section_id" });
+  TeacherAssignment.hasMany(Homework, { foreignKey: "teacher_assignment_id" });
   HomeworkSubmission.belongsTo(Homework, { foreignKey: "homework_id" });
   HomeworkSubmission.belongsTo(Student, { foreignKey: "student_id" });
 

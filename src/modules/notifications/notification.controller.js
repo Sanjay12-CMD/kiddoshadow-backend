@@ -21,15 +21,15 @@ export const createNotification = asyncHandler(async (req, res) => {
 
 /* ALL USERS: LIST */
 export const listNotifications = asyncHandler(async (req, res) => {
-  const notifications = await listNotificationsForUserService({
+  const result = await listNotificationsForUserService({
     school_id: req.user.school_id,
-    user_role: req.user.role,
-    class_id: req.user.class_id,
-    section_id: req.user.section_id,
+    user_id: req.user.id,
+    query: req.query,
   });
 
   res.json({
     success: true,
-    data: notifications,
+    total: result.count,
+    items: result.rows,
   });
 });

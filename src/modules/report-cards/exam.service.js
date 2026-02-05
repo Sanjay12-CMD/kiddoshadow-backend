@@ -1,4 +1,6 @@
 import Exam from "./exam.model.js";
+import AppError from "../../shared/appError.js";
+import { getPagination } from "../../shared/utils/pagination.js";
 
 export const createExamService = async ({
   school_id,
@@ -11,7 +13,7 @@ export const createExamService = async ({
     where: { school_id, class_id, name },
   });
 
-  if (exists) return { error: "EXAM_EXISTS" };
+  if (exists) throw new AppError("EXAM_EXISTS", 409);
 
   const exam = await Exam.create({
     school_id,
@@ -21,12 +23,12 @@ export const createExamService = async ({
     end_date,
   });
 
-  return { exam };
+  return exam;
 };
 
 export const lockExamService = async ({ exam_id }) => {
   const exam = await Exam.findByPk(exam_id);
-  if (!exam) return null;
+  if (!exam) throw new AppError("EXAM_NOT_FOUND", 404);
 
   exam.is_locked = true;
   await exam.save();
@@ -37,9 +39,14 @@ export const lockExamService = async ({ exam_id }) => {
 export const listExamsByClassService = async ({
   school_id,
   class_id,
+  query,
 }) => {
-  return Exam.findAll({
+  const { limit, offset } = getPagination(query);
+
+  return Exam.findAndCountAll({
     where: { school_id, class_id },
-    order: [["created_at", "DESC"]],
+    order: [["start_date", "DESC"]],
+    limit,
+    offset,
   });
 };

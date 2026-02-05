@@ -10,7 +10,7 @@ const TeacherClassSession = db.define(
       autoIncrement: true,
     },
 
-   school_id: {
+    school_id: {
       type: DataTypes.BIGINT,
       allowNull: false,
       references: {
@@ -20,44 +20,24 @@ const TeacherClassSession = db.define(
       onDelete: "CASCADE",
     },
 
-    teacher_id: {
+    teacher_assignment_id: {
       type: DataTypes.BIGINT,
       allowNull: false,
       references: {
-        model: "teachers",
+        model: "teacher_assignments",
         key: "id",
       },
       onDelete: "CASCADE",
     },
 
-    class_id: {
+    timetable_id: {
       type: DataTypes.BIGINT,
-      allowNull: false,
+      allowNull: true, // optional link to specific timetable slot
       references: {
-        model: "classes",
+        model: "timetables",
         key: "id",
       },
-      onDelete: "CASCADE",
-    },
-
-    section_id: {
-      type: DataTypes.BIGINT,
-      allowNull: false,
-      references: {
-        model: "sections",
-        key: "id",
-      },
-      onDelete: "CASCADE",
-    },
-
-    subject_id: {
-      type: DataTypes.BIGINT,
-      allowNull: false,
-      references: {
-        model: "subjects",
-        key: "id",
-      },
-      onDelete: "CASCADE",
+      onDelete: "SET NULL",
     },
 
     started_at: {
@@ -69,15 +49,14 @@ const TeacherClassSession = db.define(
       type: DataTypes.DATE,
       allowNull: true,
     },
-
-
-
   },
   {
     tableName: "teacher_class_sessions",
     underscored: true,
+    timestamps: true,
     indexes: [
-      { fields: ["teacher_id"] },
+      { fields: ["teacher_assignment_id"] },
+      { fields: ["timetable_id"] },
       { fields: ["started_at"] },
     ],
   }

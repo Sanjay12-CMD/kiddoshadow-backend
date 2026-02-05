@@ -52,7 +52,7 @@ const Timetable = db.define(
     teacher_assignment_id: {
       type: DataTypes.BIGINT,
       allowNull: true, // NULL = break
-      references: { model: "teacher_section_assignments", key: "id" },
+      references: { model: "teacher_assignments", key: "id" },
     },
 
     title: {

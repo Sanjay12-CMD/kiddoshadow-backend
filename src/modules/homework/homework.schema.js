@@ -4,7 +4,7 @@ import { z } from "zod";
 export const createHomeworkSchema = z.object({
   class_id: z.number().int().positive(),
   section_id: z.number().int().positive(),
-  subject_id: z.number().int().positive(),
+  teacher_assignment_id: z.number().int().positive(),
   homework_date: z.string(), // YYYY-MM-DD
   description: z.string().min(1),
 });

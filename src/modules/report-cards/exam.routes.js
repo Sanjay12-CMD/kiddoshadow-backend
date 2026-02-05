@@ -20,14 +20,14 @@ router.use(protect);
 /* teacher/admin */
 router.post(
   "/",
-  allowRoles("teacher", "admin"),
+  allowRoles("teacher", "school_admin"),
   validate(createExamSchema),
   createExam
 );
 
 router.post(
   "/:id/lock",
-  allowRoles("teacher", "admin"),
+  allowRoles("school_admin"),
   validate(lockExamSchema),
   lockExam
 );

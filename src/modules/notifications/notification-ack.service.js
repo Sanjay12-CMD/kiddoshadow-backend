@@ -1,5 +1,6 @@
-import Notification from "./notifications.model.js";
+import Notification from "./notification.model.js";
 import NotificationAck from "./notification-ack.model.js";
+import { getPagination } from "../../shared/utils/pagination.js";
 import AppError from "../../shared/appError.js";
 
 export const acknowledgeNotificationService = async ({
@@ -33,6 +34,7 @@ export const acknowledgeNotificationService = async ({
 export const listNotificationAcksService = async ({
   notification_id,
   requester,
+  query,
 }) => {
   const notification = await Notification.findByPk(notification_id);
   if (!notification) {
@@ -47,8 +49,13 @@ export const listNotificationAcksService = async ({
     throw new AppError("Not allowed to view acknowledgements", 403);
   }
 
-  return NotificationAck.findAll({
+  const { limit, offset } = getPagination(query);
+
+  return NotificationAck.findAndCountAll({
     where: { notification_id },
-    order: [["acknowledged_at", "ASC"]],
+    include: [{ model: Notification }],
+    order: [["created_at", "DESC"]],
+    limit,
+    offset,
   });
 };

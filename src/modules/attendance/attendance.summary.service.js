@@ -7,40 +7,57 @@ import Class from "../classes/classes.model.js";
 import Section from "../sections/section.model.js";
 import AppError from "../../shared/appError.js";
 import { getPagination } from "../../shared/utils/pagination.js";
+import TeacherClassSession from "../teacher-class-sessions/teacher-class-session.model.js";
 
 /* =========================
    TEACHER: MARK ATTENDANCE
 ========================= */
 export const markAttendanceService = async ({
+  user,
   school_id,
-  teacher_user_id,
-  class_id,
-  section_id,
-  date,
+  teacher_class_session_id,
   records, // [{ student_id, status }]
 }) => {
+  // 1️⃣ Validate session
+  const session = await TeacherClassSession.findOne({
+    where: {
+      id: teacher_class_session_id,
+      school_id,
+      ended_at: null,
+    },
+  });
+
+  if (!session) {
+    throw new AppError("SESSION_NOT_ACTIVE", 400);
+  }
+
+  // 2️⃣ Permission check
+  if (user.role === "teacher" && session.teacher_id !== user.teacher_id) {
+    throw new AppError("FORBIDDEN", 403);
+  }
+
+  // 3️⃣ Mark attendance
   for (const { student_id, status } of records) {
     const student = await Student.findOne({
       where: {
         id: student_id,
         school_id,
-        class_id,
-        section_id,
+        class_id: session.class_id,
+        section_id: session.section_id,
+        is_active: true,
       },
     });
 
     if (!student) {
-      throw new AppError(`Student ${student_id} not found`, 404);
+      throw new AppError(`INVALID_STUDENT ${student_id}`, 400);
     }
 
     await Attendance.upsert({
       school_id,
+      teacher_class_session_id,
       student_id,
-      class_id,
-      section_id,
-      date,
       status,
-      marked_by: teacher_user_id,
+      marked_by: user.id,
     });
   }
 
@@ -57,39 +74,39 @@ export const getTeacherAttendanceSummaryService = async ({
   const { limit, offset } = getPagination(query);
   const { from_date, to_date, class_id, section_id } = query || {};
 
-  const where = { school_id };
+  const sessionWhere = { school_id };
 
-  if (class_id) where.class_id = Number(class_id);
-  if (section_id) where.section_id = Number(section_id);
+  if (class_id) sessionWhere.class_id = Number(class_id);
+  if (section_id) sessionWhere.section_id = Number(section_id);
 
   if (from_date || to_date) {
-    where.date = {};
-    if (from_date) where.date[Op.gte] = from_date;
-    if (to_date) where.date[Op.lte] = to_date;
+    sessionWhere.started_at = {};
+    if (from_date) sessionWhere.started_at[Op.gte] = from_date;
+    if (to_date) sessionWhere.started_at[Op.lte] = to_date;
   }
 
   return Attendance.findAndCountAll({
-    where,
     include: [
+      {
+        model: TeacherClassSession,
+        where: sessionWhere,
+      },
       {
         model: Student,
         include: [
           { model: User, attributes: ["id", "name"] },
-          { model: Class, attributes: ["id", "class_name"] },
-          { model: Section, attributes: ["id", "name"] },
         ],
       },
     ],
     limit,
     offset,
-    order: [["date", "DESC"]],
+    order: [["created_at", "DESC"]],
   });
 };
 
 /* =========================
    PARENT: ATTENDANCE SUMMARY
-========================= */
-export const getParentAttendanceSummaryService = async ({
+========================= */export const getParentAttendanceSummaryService = async ({
   parent_user_id,
   query,
 }) => {
@@ -97,50 +114,43 @@ export const getParentAttendanceSummaryService = async ({
   const { from_date, to_date } = query || {};
 
   const links = await Parent.findAll({
-    where: {
-      user_id: parent_user_id,
-      approval_status: "approved",
-    },
+    where: { user_id: parent_user_id, approval_status: "approved" },
     attributes: ["student_id"],
   });
 
   const studentIds = links.map((l) => l.student_id);
-  if (!studentIds.length) {
-    return { count: 0, rows: [] };
-  }
+  if (!studentIds.length) return { count: 0, rows: [] };
 
-  const where = {
-    student_id: studentIds,
-  };
+  const sessionWhere = {};
 
   if (from_date || to_date) {
-    where.date = {};
-    if (from_date) where.date[Op.gte] = from_date;
-    if (to_date) where.date[Op.lte] = to_date;
+    sessionWhere.started_at = {};
+    if (from_date) sessionWhere.started_at[Op.gte] = from_date;
+    if (to_date) sessionWhere.started_at[Op.lte] = to_date;
   }
 
   return Attendance.findAndCountAll({
-    where,
+    where: { student_id: studentIds },
     include: [
       {
+        model: TeacherClassSession,
+        where: sessionWhere,
+      },
+      {
         model: Student,
-        include: [
-          { model: User, attributes: ["id", "name"] },
-          { model: Class, attributes: ["id", "class_name"] },
-          { model: Section, attributes: ["id", "name"] },
-        ],
+        include: [{ model: User, attributes: ["id", "name"] }],
       },
     ],
     limit,
     offset,
-    order: [["date", "DESC"]],
+    order: [["created_at", "DESC"]],
   });
 };
 
+
 /* =========================
    STUDENT: ATTENDANCE SUMMARY
-========================= */
-export const getStudentAttendanceSummaryService = async ({
+========================= */export const getStudentAttendanceSummaryService = async ({
   student_user_id,
   query,
 }) => {
@@ -148,34 +158,26 @@ export const getStudentAttendanceSummaryService = async ({
   const { from_date, to_date } = query || {};
 
   const student = await Student.findOne({ where: { user_id: student_user_id } });
-  if (!student) {
-    throw new AppError("Student profile not found", 404);
-  }
+  if (!student) throw new AppError("Student profile not found", 404);
 
-  const where = {
-    student_id: student.id,
-  };
+  const sessionWhere = {};
 
   if (from_date || to_date) {
-    where.date = {};
-    if (from_date) where.date[Op.gte] = from_date;
-    if (to_date) where.date[Op.lte] = to_date;
+    sessionWhere.started_at = {};
+    if (from_date) sessionWhere.started_at[Op.gte] = from_date;
+    if (to_date) sessionWhere.started_at[Op.lte] = to_date;
   }
 
   return Attendance.findAndCountAll({
-    where,
+    where: { student_id: student.id },
     include: [
       {
-        model: Student,
-        include: [
-          { model: User, attributes: ["id", "name"] },
-          { model: Class, attributes: ["id", "class_name"] },
-          { model: Section, attributes: ["id", "name"] },
-        ],
+        model: TeacherClassSession,
+        where: sessionWhere,
       },
     ],
     limit,
     offset,
-    order: [["date", "DESC"]],
+    order: [["created_at", "DESC"]],
   });
 };

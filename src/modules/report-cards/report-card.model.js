@@ -13,18 +13,25 @@ const ReportCard = db.define(
     student_id: {
       type: DataTypes.BIGINT,
       allowNull: false,
+      references: { model: "students", key: "id" },
     },
 
     class_id: {
       type: DataTypes.BIGINT,
       allowNull: false,
+      references: { model: "classes", key: "id" },
     },
 
     exam_id: {
       type: DataTypes.BIGINT,
       allowNull: false,
+      references: { model: "exams", key: "id" },
     },
-
+    school_id: {
+      type: DataTypes.BIGINT,
+      allowNull: false,
+      references: { model: "schools", key: "id" },
+    },
     remarks: {
       type: DataTypes.TEXT,
       allowNull: true,

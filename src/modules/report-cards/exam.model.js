@@ -13,11 +13,13 @@ const Exam = db.define(
     school_id: {
       type: DataTypes.BIGINT,
       allowNull: false,
+      references: { model: "schools", key: "id" },
     },
 
     class_id: {
       type: DataTypes.BIGINT,
       allowNull: false,
+      references: { model: "classes", key: "id" },
     },
 
     name: {
@@ -43,6 +45,7 @@ const Exam = db.define(
   {
     tableName: "exams",
     underscored: true,
+    timestamps: true,
     indexes: [
       { fields: ["school_id"] },
       { fields: ["class_id"] },

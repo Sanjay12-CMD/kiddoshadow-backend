@@ -26,6 +26,7 @@ router.use(protect);
 router.post("/", allowAdminOrClassTeacher, validate(createReportCardSchema), createReportCard);
 router.post(
   "/:id/marks",
+  allowRoles("school_admin", "teacher"),
   validate(saveReportCardMarksSchema),
   saveReportCardMarks
 );

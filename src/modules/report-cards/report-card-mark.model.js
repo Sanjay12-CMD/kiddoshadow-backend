@@ -13,11 +13,14 @@ const ReportCardMark = db.define(
     report_card_id: {
       type: DataTypes.BIGINT,
       allowNull: false,
+      references: { model: "report_cards", key: "id" },
+      onDelete: "CASCADE",
     },
 
     subject_id: {
       type: DataTypes.BIGINT,
       allowNull: false,
+      references: { model: "subjects", key: "id" },
     },
 
     marks_obtained: {

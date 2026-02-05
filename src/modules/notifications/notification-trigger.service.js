@@ -1,4 +1,4 @@
-import Notification from "./notifications.model.js";
+import Notification from "./notification.model.js";
 
 /**
  * Generic trigger helper
