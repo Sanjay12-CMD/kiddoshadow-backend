@@ -30,6 +30,36 @@ const TeacherClassSession = db.define(
       onDelete: "CASCADE",
     },
 
+    teacher_id: {
+      type: DataTypes.BIGINT,
+      allowNull: false,
+      references: {
+        model: "teachers",
+        key: "id",
+      },
+      onDelete: "CASCADE",
+    },
+
+    class_id: {
+      type: DataTypes.BIGINT,
+      allowNull: false,
+      references: {
+        model: "classes",
+        key: "id",
+      },
+      onDelete: "CASCADE",
+    },
+
+    section_id: {
+      type: DataTypes.BIGINT,
+      allowNull: false,
+      references: {
+        model: "sections",
+        key: "id",
+      },
+      onDelete: "CASCADE",
+    },
+
     timetable_id: {
       type: DataTypes.BIGINT,
       allowNull: true, // optional link to specific timetable slot
@@ -56,6 +86,9 @@ const TeacherClassSession = db.define(
     timestamps: true,
     indexes: [
       { fields: ["teacher_assignment_id"] },
+      { fields: ["teacher_id"] },
+      { fields: ["class_id"] },
+      { fields: ["section_id"] },
       { fields: ["timetable_id"] },
       { fields: ["started_at"] },
     ],

@@ -12,6 +12,7 @@ import {
 export const createReportCard = asyncHandler(async (req, res) => {
   const reportCard = await createReportCardService({
     school_id: req.user.school_id,
+    user: req.user,
     ...req.body,
   });
 
@@ -59,6 +60,57 @@ export const getReportCard = asyncHandler(async (req, res) => {
     throw new AppError("Report card not available", 404);
   }
 
+  // school scope (super_admin bypass)
+  if (
+    req.user.role !== "super_admin" &&
+    String(reportCard.school_id) !== String(req.user.school_id)
+  ) {
+    throw new AppError("Forbidden", 403);
+  }
+
+  const student = reportCard.student || reportCard.Student;
+
+  if (req.user.role === "student") {
+    if (!student || student.user_id !== req.user.id) {
+      throw new AppError("Forbidden", 403);
+    }
+  }
+
+  if (req.user.role === "parent") {
+    const Parent = (await import("../parents/parent.model.js")).default;
+    const link = await Parent.findOne({
+      where: {
+        user_id: req.user.id,
+        student_id: reportCard.student_id,
+        approval_status: "approved",
+      },
+    });
+
+    if (!link) {
+      throw new AppError("Forbidden", 403);
+    }
+  }
+
+  if (req.user.role === "teacher") {
+    const TeacherAssignment = (
+      await import("../teacher-assignments/teacher-assignment.model.js")
+    ).default;
+
+    const assignment = await TeacherAssignment.findOne({
+      where: {
+        teacher_id: req.user.teacher_id,
+        section_id: student?.section_id,
+        school_id: reportCard.school_id,
+        is_class_teacher: true,
+        is_active: true,
+      },
+    });
+
+    if (!assignment) {
+      throw new AppError("Forbidden", 403);
+    }
+  }
+
   res.json({
     success: true,
     data: reportCard,
@@ -66,22 +118,12 @@ export const getReportCard = asyncHandler(async (req, res) => {
 });
 
 export const listReportCards = asyncHandler(async (req, res) => {
-  const student_id = req.user.additionalClaims?.student_id;
-
-  if (!student_id && req.user.role === 'student') {
-    const Student = (await import("../students/student.model.js")).default;
-    const s = await Student.findOne({ where: { user_id: req.user.id } });
-    if (s) req.user.student_id = s.id;
-  }
-
-  const idToUse = student_id || req.user.student_id;
-
-  if (!idToUse) {
+  if (!req.user.student_id) {
     throw new AppError("Student profile not found", 404);
   }
 
   const result = await listReportCardsService({
-    student_id: idToUse,
+    student_id: req.user.student_id,
     school_id: req.user.school_id,
   });
 

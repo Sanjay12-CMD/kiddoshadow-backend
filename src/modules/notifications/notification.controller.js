@@ -21,10 +21,36 @@ export const createNotification = asyncHandler(async (req, res) => {
 
 /* ALL USERS: LIST */
 export const listNotifications = asyncHandler(async (req, res) => {
+  let classIds = [];
+  let sectionIds = [];
+
+  if (req.user.role === "student") {
+    if (req.user.class_id) classIds = [req.user.class_id];
+    if (req.user.section_id) sectionIds = [req.user.section_id];
+  }
+
+  if (req.user.role === "parent") {
+    const Parent = (await import("../parents/parent.model.js")).default;
+    const Student = (await import("../students/student.model.js")).default;
+
+    const links = await Parent.findAll({
+      where: { user_id: req.user.id, approval_status: "approved" },
+      include: [{ model: Student, attributes: ["class_id", "section_id"] }],
+    });
+
+    classIds = links
+      .map((l) => (l.student ?? l.Student)?.class_id)
+      .filter((v) => v !== undefined && v !== null);
+    sectionIds = links
+      .map((l) => (l.student ?? l.Student)?.section_id)
+      .filter((v) => v !== undefined && v !== null);
+  }
+
   const result = await listNotificationsForUserService({
     school_id: req.user.school_id,
-    user_id: req.user.id,
-    query: req.query,
+    user_role: req.user.role,
+    class_ids: classIds,
+    section_ids: sectionIds,
   });
 
   res.json({

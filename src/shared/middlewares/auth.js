@@ -1,6 +1,8 @@
 import jwt from "jsonwebtoken";
 import User from "../../modules/users/user.model.js";
 import School from "../../modules/schools/school.model.js";
+import Teacher from "../../modules/teachers/teacher.model.js";
+import Student from "../../modules/students/student.model.js";
 import AppError from "../appError.js";
 
 export async function protect(req, res, next) {
@@ -35,13 +37,37 @@ export async function protect(req, res, next) {
       }
     }
 
-    // 5️⃣ Attach trusted identity
-    req.user = {
+    // 5️⃣ Attach trusted identity + profile IDs (used across services)
+    const identity = {
       id: user.id,
       role: user.role,
       school_id: user.school_id,
       first_login: user.first_login,
     };
+
+    if (user.role === "teacher") {
+      const teacher = await Teacher.findOne({
+        where: { user_id: user.id, school_id: user.school_id },
+      });
+      if (!teacher) {
+        throw new AppError("Teacher profile not found", 401);
+      }
+      identity.teacher_id = teacher.id;
+    }
+
+    if (user.role === "student") {
+      const student = await Student.findOne({
+        where: { user_id: user.id, school_id: user.school_id },
+      });
+      if (!student) {
+        throw new AppError("Student profile not found", 401);
+      }
+      identity.student_id = student.id;
+      identity.class_id = student.class_id;
+      identity.section_id = student.section_id;
+    }
+
+    req.user = identity;
 
     next();
   } catch (err) {

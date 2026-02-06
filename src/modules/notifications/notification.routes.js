@@ -22,7 +22,7 @@ router.use(protect);
 /* admin & teacher */
 router.post(
   "/",
-  allowRoles("admin", "teacher"),
+  allowRoles("school_admin", "teacher"),
   validate(createNotificationSchema),
   createNotification
 );

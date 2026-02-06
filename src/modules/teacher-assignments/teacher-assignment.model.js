@@ -30,6 +30,16 @@ const TeacherAssignment = db.define(
       onDelete: "CASCADE",
     },
 
+    class_id: {
+      type: DataTypes.BIGINT,
+      allowNull: false,
+      references: {
+        model: "classes",
+        key: "id",
+      },
+      onDelete: "CASCADE",
+    },
+
     section_id: {
       type: DataTypes.BIGINT,
       allowNull: false,
@@ -66,6 +76,7 @@ const TeacherAssignment = db.define(
     indexes: [
       { fields: ["school_id"] },
       { fields: ["teacher_id"] },
+      { fields: ["class_id"] },
       {
         unique: true,
         fields: ["teacher_id", "section_id", "subject_id"],

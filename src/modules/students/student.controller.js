@@ -6,6 +6,7 @@ import {
   listStudentsService,
   moveStudentService,
   updateStudentStatusService,
+  assignStudentsToSectionService,
 } from "./student.service.js";
 import Student from "./student.model.js";
 import User from "../users/user.model.js";

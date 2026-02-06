@@ -79,6 +79,7 @@ export const saveTimetableService = async ({
           where: {
             id: e.teacher_assignment_id,
             school_id,
+            class_id,
             section_id,
             is_active: true,
           },

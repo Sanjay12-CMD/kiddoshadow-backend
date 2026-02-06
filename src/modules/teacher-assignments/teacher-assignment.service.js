@@ -2,6 +2,10 @@ import TeacherAssignment from "./teacher-assignment.model.js";
 import AppError from "../../shared/appError.js";
 import { getPagination } from "../../shared/utils/pagination.js";
 import { Op } from "sequelize";
+import Teacher from "../teachers/teacher.model.js";
+import Class from "../classes/classes.model.js";
+import Section from "../sections/section.model.js";
+import Subject from "../subjects/subject.model.js";
 
 
 /* CREATE */
@@ -13,6 +17,28 @@ export async function assignTeacher({
   subjectId,
   isClassTeacher = false,
 }) {
+  const [teacher, cls, section, subject] = await Promise.all([
+    Teacher.findOne({ where: { id: teacherId, school_id: schoolId } }),
+    Class.findOne({ where: { id: classId, school_id: schoolId } }),
+    Section.findOne({
+      where: { id: sectionId, class_id: classId, school_id: schoolId, is_active: true },
+    }),
+    Subject.findOne({ where: { id: subjectId, school_id: schoolId } }),
+  ]);
+
+  if (!teacher) {
+    throw new AppError("TEACHER_NOT_FOUND", 404);
+  }
+  if (!cls) {
+    throw new AppError("CLASS_NOT_FOUND", 404);
+  }
+  if (!section) {
+    throw new AppError("SECTION_NOT_FOUND", 404);
+  }
+  if (!subject) {
+    throw new AppError("SUBJECT_NOT_FOUND", 404);
+  }
+
   // Check for existing assignment (same teacher + section + subject in same school)
   const exists = await TeacherAssignment.findOne({
     where: {

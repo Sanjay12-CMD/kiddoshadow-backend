@@ -5,6 +5,7 @@ import Homework from "../homework/homework.model.js";
 import HomeworkSubmission from "../homework/homework-submission.model.js";
 import Student from "../students/student.model.js";
 import ReportCard from "../report-cards/report-card.model.js";
+import TeacherAssignment from "../teacher-assignments/teacher-assignment.model.js";
 import { Op } from "sequelize";
 
 const getToday = () => new Date().toISOString().slice(0, 10);
@@ -15,21 +16,39 @@ const getDayName = () =>
 
 export const getTeacherDashboardService = async ({
   school_id,
-  teacher_user_id,
+  teacher_id,
 }) => {
   const today = getToday();
   const day = getDayName();
 
   /* 1️⃣ Classes handled by teacher */
-  const classes = await Class.findAll({
+  const assignments = await TeacherAssignment.findAll({
     where: {
       school_id,
-      class_teacher_id: teacher_user_id,
+      teacher_id,
+      is_class_teacher: true,
+      is_active: true,
     },
-    include: [{ model: Section }],
+    attributes: ["class_id", "section_id"],
   });
 
-  const classIds = classes.map((c) => c.id);
+  const classIds = [
+    ...new Set(assignments.map((a) => a.class_id)),
+  ];
+  const sectionIds = assignments.map((a) => a.section_id);
+
+  const classes = classIds.length
+    ? await Class.findAll({
+        where: { school_id, id: classIds },
+        include: [
+          {
+            model: Section,
+            where: { id: sectionIds },
+            required: true,
+          },
+        ],
+      })
+    : [];
 
   /* 2️⃣ Timetable (today) */
   const timetable = await Timetable.findAll({

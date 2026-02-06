@@ -46,6 +46,11 @@ const Student = db.define(
       },
     },
 
+    roll_no: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
+
     admission_no: {
       type: DataTypes.STRING,
       allowNull: false,
@@ -81,7 +86,13 @@ const Student = db.define(
 
     family_income: {
       type: DataTypes.DECIMAL(10, 2),
+      allowNull: true,
+    },
+
+    is_active: {
+      type: DataTypes.BOOLEAN,
       allowNull: false,
+      defaultValue: true,
     },
 
     approval_status: {

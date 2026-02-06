@@ -4,6 +4,10 @@ import {
   createHomeworkService,
   listHomeworkService,
 } from "./homework.service.js";
+import {
+  getHomeworkSummaryService,
+  getHomeworkStudentStatusService,
+} from "./homework-analytics.service.js";
 
 /* TEACHER: CREATE */
 export const createHomework = asyncHandler(async (req, res) => {
@@ -34,9 +38,25 @@ export const listHomework = asyncHandler(async (req, res) => {
   });
 });
 export const getHomeworkSummary = asyncHandler(async (req, res) => {
-  res.json({ success: true, data: {} });
+  const data = await getHomeworkSummaryService({
+    school_id: req.user.school_id,
+    class_id: req.query.class_id ? Number(req.query.class_id) : undefined,
+    section_id: req.query.section_id ? Number(req.query.section_id) : undefined,
+    date: req.query.date,
+  });
+
+  res.json({ success: true, data });
 });
 
 export const getHomeworkStudentStatus = asyncHandler(async (req, res) => {
-  res.json({ success: true, data: [] });
+  const data = await getHomeworkStudentStatusService({
+    school_id: req.user.school_id,
+    homework_id: Number(req.params.homework_id),
+  });
+
+  if (!data) {
+    throw new AppError("HOMEWORK_NOT_FOUND", 404);
+  }
+
+  res.json({ success: true, data });
 });

@@ -37,7 +37,7 @@ export async function createGroupChatWithMembers({
 
     // add students
     const students = await Student.findAll({
-      where: { section_id: section.id },
+      where: { section_id: section.id, school_id: section.school_id },
     });
 
     for (const student of students) {

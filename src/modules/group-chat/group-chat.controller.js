@@ -21,18 +21,25 @@ import db from "../../config/db.js";
 export const createGroupChat = asyncHandler(async (req, res) => {
   const { subjectId, sectionId } = req.body;
   const userId = req.user.id;
+  const schoolId = req.user.school_id;
 
-  const teacher = await Teacher.findOne({ where: { user_id: userId } });
+  const teacher = await Teacher.findOne({
+    where: { user_id: userId, school_id: schoolId },
+  });
   if (!teacher) {
     throw new AppError("Only teachers can create group chats", 403);
   }
 
-  const section = await Section.findByPk(sectionId);
+  const section = await Section.findOne({
+    where: { id: sectionId, school_id: schoolId, is_active: true },
+  });
   if (!section) {
     throw new AppError("Section not found", 404);
   }
 
-  const subject = await Subject.findByPk(subjectId);
+  const subject = await Subject.findOne({
+    where: { id: subjectId, school_id: schoolId },
+  });
   if (!subject) {
     throw new AppError("Subject not found", 404);
   }
@@ -50,7 +57,7 @@ export const createGroupChat = asyncHandler(async (req, res) => {
   }
 
   const students = await Student.findAll({
-    where: { section_id: sectionId },
+    where: { section_id: sectionId, school_id: schoolId },
   });
 
   const chat = await db.transaction(async (t) => {
@@ -97,6 +104,7 @@ export const createGroupChat = asyncHandler(async (req, res) => {
  */
 export const listGroupChats = asyncHandler(async (req, res) => {
   const userId = req.user.id;
+  const schoolId = req.user.school_id;
 
   const memberships = await GroupChatMember.findAll({
     where: { user_id: userId },
@@ -104,9 +112,24 @@ export const listGroupChats = asyncHandler(async (req, res) => {
       {
         model: GroupChat,
         include: [
-          { model: Subject, attributes: ["id", "name"] },
-          { model: Class, attributes: ["id", "class_name"] },
-          { model: Section, attributes: ["id", "name"] },
+          {
+            model: Subject,
+            attributes: ["id", "name"],
+            where: { school_id: schoolId },
+            required: true,
+          },
+          {
+            model: Class,
+            attributes: ["id", "class_name"],
+            where: { school_id: schoolId },
+            required: true,
+          },
+          {
+            model: Section,
+            attributes: ["id", "name"],
+            where: { school_id: schoolId },
+            required: true,
+          },
         ],
       },
     ],
@@ -131,6 +154,23 @@ export const listGroupChats = asyncHandler(async (req, res) => {
 export const getGroupMessages = asyncHandler(async (req, res) => {
   const { chatId } = req.params;
   const userId = req.user.id;
+  const schoolId = req.user.school_id;
+
+  const chat = await GroupChat.findOne({
+    where: { id: chatId },
+    include: [
+      {
+        model: Section,
+        attributes: ["id"],
+        where: { school_id: schoolId },
+        required: true,
+      },
+    ],
+  });
+
+  if (!chat) {
+    throw new AppError("Group chat not found", 404);
+  }
 
   // Check membership
   const member = await GroupChatMember.findOne({

@@ -32,7 +32,7 @@ router.post(
 router.post(
   "/admin/parents/:parent_id/approve",
   protect,
-  allowRoles("admin"),
+  allowRoles("school_admin"),
   validate(approveParentSchema),
   approveParent
 );

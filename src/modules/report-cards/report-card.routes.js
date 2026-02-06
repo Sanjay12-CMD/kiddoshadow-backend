@@ -13,9 +13,6 @@ import {
   getReportCard,
   listReportCards,
 } from "./report-card.controller.js";
-import {
-  allowAdminOrClassTeacher,
-} from "../../shared/middlewares/permissions.js";
 import { allowRoles } from "../../shared/middlewares/role.js";
 
 const router = express.Router();
@@ -23,7 +20,12 @@ const router = express.Router();
 router.use(protect);
 
 /* teacher */
-router.post("/", allowAdminOrClassTeacher, validate(createReportCardSchema), createReportCard);
+router.post(
+  "/",
+  allowRoles("school_admin", "teacher"),
+  validate(createReportCardSchema),
+  createReportCard
+);
 router.post(
   "/:id/marks",
   allowRoles("school_admin", "teacher"),
@@ -32,7 +34,7 @@ router.post(
 );
 router.post(
   "/:id/publish",
-  allowAdminOrClassTeacher,
+  allowRoles("school_admin", "teacher"),
   validate(publishReportCardSchema),
   publishReportCard
 );

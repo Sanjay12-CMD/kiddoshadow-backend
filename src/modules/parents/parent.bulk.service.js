@@ -23,9 +23,18 @@ export const bulkApproveParentsService = async ({
       throw err;
     }
 
-    const allowedRoles = ["admin", "superadmin", "school_admin"];
+    const allowedRoles = ["school_admin", "super_admin"];
     if (!allowedRoles.includes(adminUser.role)) {
       const err = new Error("Forbidden: insufficient role");
+      err.statusCode = 403;
+      throw err;
+    }
+
+    if (
+      adminUser.role !== "super_admin" &&
+      String(adminUser.school_id) !== String(school_id)
+    ) {
+      const err = new Error("Forbidden: cross-school access");
       err.statusCode = 403;
       throw err;
     }

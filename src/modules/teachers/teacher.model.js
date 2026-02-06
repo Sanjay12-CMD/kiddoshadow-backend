@@ -60,6 +60,12 @@ const Teacher = db.define(
       defaultValue: "pending",
     },
 
+    is_active: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: true,
+    },
+
     approved_by: {
       type: DataTypes.BIGINT,
       allowNull: true,

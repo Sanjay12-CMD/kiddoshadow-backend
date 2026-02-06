@@ -37,6 +37,10 @@ export const markAttendanceService = async ({
   }
 
   // 3️⃣ Mark attendance
+  const attendanceDate = session.started_at
+    ? new Date(session.started_at)
+    : new Date();
+
   for (const { student_id, status } of records) {
     const student = await Student.findOne({
       where: {
@@ -55,7 +59,10 @@ export const markAttendanceService = async ({
     await Attendance.upsert({
       school_id,
       teacher_class_session_id,
+      class_id: session.class_id,
+      section_id: session.section_id,
       student_id,
+      date: attendanceDate,
       status,
       marked_by: user.id,
     });
@@ -70,6 +77,7 @@ export const markAttendanceService = async ({
 export const getTeacherAttendanceSummaryService = async ({
   school_id,
   query,
+  teacher_id,
 }) => {
   const { limit, offset } = getPagination(query);
   const { from_date, to_date, class_id, section_id } = query || {};
@@ -78,6 +86,7 @@ export const getTeacherAttendanceSummaryService = async ({
 
   if (class_id) sessionWhere.class_id = Number(class_id);
   if (section_id) sessionWhere.section_id = Number(section_id);
+  if (teacher_id) sessionWhere.teacher_id = teacher_id;
 
   if (from_date || to_date) {
     sessionWhere.started_at = {};

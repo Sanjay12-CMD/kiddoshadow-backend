@@ -4,7 +4,7 @@ import { getTeacherDashboardService } from "./teacher-dashboard.service.js";
 export const getTeacherDashboard = asyncHandler(async (req, res) => {
   const data = await getTeacherDashboardService({
     school_id: req.user.school_id,
-    teacher_user_id: req.user.id,
+    teacher_id: req.user.teacher_id,
   });
 
   res.json({

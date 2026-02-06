@@ -10,6 +10,7 @@ export const acknowledgeNotification = asyncHandler(async (req, res) => {
     notification_id: req.params.id,
     user_id: req.user.id,
     user_role: req.user.role,
+    school_id: req.user.school_id,
   });
 
   res.json({

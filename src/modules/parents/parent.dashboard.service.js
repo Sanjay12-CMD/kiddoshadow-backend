@@ -20,6 +20,7 @@ import { Op } from "sequelize";
 ========================================================= */
 export const getParentChildrenService = async ({
   parent_user_id,
+  school_id,
   query,
 }) => {
   const { limit, offset } = getPagination(query);
@@ -32,7 +33,7 @@ export const getParentChildrenService = async ({
     include: [
       {
         model: Student,
-        where: { approval_status: "approved" },
+        where: { approval_status: "approved", school_id },
         include: [
           {
             model: User,
@@ -72,10 +73,15 @@ export const getParentDailyDashboardService = async ({
 }) => {
   // get children
   const students = await Student.findAll({
+    where: { school_id },
     include: [
       {
-        association: "parents",
-        where: { user_id: parent_user_id },
+        model: Parent,
+        where: { user_id: parent_user_id, approval_status: "approved" },
+      },
+      {
+        model: User,
+        attributes: ["id", "name"],
       },
     ],
   });
@@ -153,7 +159,7 @@ export const getParentDailyDashboardService = async ({
     dashboards.push({
       student: {
         id: student.id,
-        name: student.name,
+        name: (student.user ?? student.User)?.name ?? null,
         roll_no: student.roll_no,
         class_id: student.class_id,
         section_id: student.section_id,

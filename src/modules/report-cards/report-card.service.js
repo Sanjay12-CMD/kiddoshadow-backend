@@ -6,6 +6,7 @@ import TeacherAssignment from "../teacher-assignments/teacher-assignment.model.j
 import { triggerReportCardNotification } from "../notifications/notification-trigger.service.js";
 import db from "../../config/db.js";
 import AppError from "../../shared/appError.js";
+import User from "../users/user.model.js";
 
 /* =========================
    CREATE (DRAFT)
@@ -14,6 +15,7 @@ export const createReportCardService = async ({
   school_id,
   student_id,
   exam_id,
+  user,
 }) => {
   const exam = await Exam.findOne({
     where: { id: exam_id, school_id },
@@ -27,8 +29,21 @@ export const createReportCardService = async ({
   });
   if (!student) throw new AppError("STUDENT_NOT_FOUND", 404);
 
+  if (user?.role === "teacher") {
+    const assignment = await TeacherAssignment.findOne({
+      where: {
+        teacher_id: user.teacher_id,
+        section_id: student.section_id,
+        school_id,
+        is_class_teacher: true,
+        is_active: true,
+      },
+    });
+    if (!assignment) throw new AppError("FORBIDDEN", 403);
+  }
+
   const exists = await ReportCard.findOne({
-    where: { student_id, exam_id },
+    where: { student_id, exam_id, school_id },
   });
   if (exists) throw new AppError("REPORT_CARD_EXISTS", 409);
 
@@ -56,6 +71,9 @@ export const saveReportCardMarksService = async ({
       transaction: t
     });
     if (!reportCard) throw new AppError("REPORT_CARD_NOT_FOUND", 404);
+    if (String(reportCard.school_id) !== String(user.school_id)) {
+      throw new AppError("FORBIDDEN", 403);
+    }
 
     const exam = await Exam.findByPk(reportCard.exam_id, { transaction: t });
     if (exam?.is_locked) throw new AppError("EXAM_LOCKED", 400);
@@ -66,6 +84,7 @@ export const saveReportCardMarksService = async ({
         where: {
           teacher_id: user.teacher_id,
           section_id: reportCard.student.section_id,
+          school_id: reportCard.school_id,
           is_class_teacher: true,
           is_active: true
         },
@@ -102,9 +121,17 @@ export const publishReportCardService = async ({
   user,
 }) => {
   const reportCard = await ReportCard.findByPk(report_card_id, {
-    include: [{ model: Student }]
+    include: [
+      {
+        model: Student,
+        include: [{ model: User, attributes: ["name"] }],
+      },
+    ],
   });
   if (!reportCard) throw new AppError("REPORT_CARD_NOT_FOUND", 404);
+  if (String(reportCard.school_id) !== String(user.school_id)) {
+    throw new AppError("FORBIDDEN", 403);
+  }
 
   if (reportCard.published_at) throw new AppError("ALREADY_PUBLISHED", 400);
 
@@ -117,6 +144,7 @@ export const publishReportCardService = async ({
       where: {
         teacher_id: user.teacher_id,
         section_id: reportCard.student.section_id,
+        school_id: reportCard.school_id,
         is_class_teacher: true,
         is_active: true
       }
@@ -135,7 +163,7 @@ export const publishReportCardService = async ({
     await triggerReportCardNotification({
       school_id: student.school_id,
       teacher_user_id: user.id,
-      student_name: student.name,
+      student_name: (student.user ?? student.User)?.name ?? "Student",
       exam_name: exam?.name || "Exam",
       class_id: student.class_id,
       section_id: student.section_id,
@@ -156,6 +184,9 @@ export const getReportCardService = async ({ report_card_id }) => {
       },
       {
         model: Exam,
+      },
+      {
+        model: Student,
       },
     ],
   });

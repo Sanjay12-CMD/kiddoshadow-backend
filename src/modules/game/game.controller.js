@@ -1,8 +1,12 @@
 import User from "../users/user.model.js";
+import GameSession from "./game-session.model.js";
+import GameSessionPlayer from "./game-session-player.model.js";
+import PlayerAnswer from "./player-answer.model.js";
+import QuizQuestion from "../quiz/quiz-question.model.js";
 import { isTimeOver } from "./game.utils.js";
-import AppError from "../../utils/AppError.js";
-import asyncHandler from "../../utils/asyncHandler.js";
-import sequelize from "../../db/index.js";
+import AppError from "../../shared/appError.js";
+import asyncHandler from "../../shared/asyncHandler.js";
+import db from "../../config/db.js";
 
 export const submitSinglePlayerQuiz = asyncHandler(async (req, res) => {
   const { playerId, answers } = req.body;
@@ -31,7 +35,7 @@ export const submitSinglePlayerQuiz = asyncHandler(async (req, res) => {
 
   let score = 0;
 
-  await sequelize.transaction(async (t) => {
+  await db.transaction(async (t) => {
     for (const ans of answers) {
       const question = await QuizQuestion.findByPk(ans.questionId, { transaction: t });
 

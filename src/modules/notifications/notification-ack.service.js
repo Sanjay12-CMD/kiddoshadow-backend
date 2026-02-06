@@ -7,6 +7,7 @@ export const acknowledgeNotificationService = async ({
   notification_id,
   user_id,
   user_role,
+  school_id,
 }) => {
   if (!["parent", "teacher", "student"].includes(user_role)) {
     throw new AppError("Not allowed to acknowledge", 403);
@@ -15,6 +16,9 @@ export const acknowledgeNotificationService = async ({
   const notification = await Notification.findByPk(notification_id);
   if (!notification) {
     throw new AppError("Notification not found", 404);
+  }
+  if (String(notification.school_id) !== String(school_id)) {
+    throw new AppError("Forbidden", 403);
   }
 
   await NotificationAck.findOrCreate({
@@ -41,9 +45,13 @@ export const listNotificationAcksService = async ({
     throw new AppError("Notification not found", 404);
   }
 
+  if (String(notification.school_id) !== String(requester.school_id)) {
+    throw new AppError("Forbidden", 403);
+  }
+
   // Permission check
   if (
-    requester.role !== "admin" &&
+    requester.role !== "school_admin" &&
     notification.sender_user_id !== requester.id
   ) {
     throw new AppError("Not allowed to view acknowledgements", 403);

@@ -20,10 +20,27 @@ const Attendance = db.define("attendance", {
     references: { model: "teacher_class_sessions", key: "id" },
   },
 
+  class_id: {
+    type: DataTypes.BIGINT,
+    allowNull: false,
+    references: { model: "classes", key: "id" },
+  },
+
+  section_id: {
+    type: DataTypes.BIGINT,
+    allowNull: false,
+    references: { model: "sections", key: "id" },
+  },
+
   student_id: {
     type: DataTypes.BIGINT,
     allowNull: false,
     references: { model: "students", key: "id" },
+  },
+
+  date: {
+    type: DataTypes.DATEONLY,
+    allowNull: false,
   },
 
   status: {
@@ -46,6 +63,9 @@ const Attendance = db.define("attendance", {
       fields: ["student_id", "teacher_class_session_id"],
     },
     { fields: ["school_id"] },
+    { fields: ["class_id"] },
+    { fields: ["section_id"] },
+    { fields: ["date"] },
     { fields: ["teacher_class_session_id"] },
     { fields: ["student_id"] },
   ],

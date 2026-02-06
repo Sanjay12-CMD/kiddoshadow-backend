@@ -28,7 +28,7 @@ router.patch(
 router.post(
   "/admin/teachers/:teacher_id/approve",
   protect,
-  allowRoles("admin"),
+  allowRoles("school_admin"),
   validate(approveTeacherProfileSchema),
   approveTeacherProfile
 );

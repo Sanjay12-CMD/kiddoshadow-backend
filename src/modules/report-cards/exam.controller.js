@@ -21,6 +21,7 @@ export const createExam = asyncHandler(async (req, res) => {
 export const lockExam = asyncHandler(async (req, res) => {
   const exam = await lockExamService({
     exam_id: Number(req.params.id),
+    school_id: req.user.school_id,
   });
 
   res.json({

@@ -24,7 +24,7 @@ const router = express.Router();
 router.post(
   "/parents",
   protect,
-  allowRoles("admin"),
+  allowRoles("school_admin"),
   validate(createParentAndLinkSchema),
   createParentAndLink
 );
@@ -32,7 +32,7 @@ router.post(
 router.post(
   "/parents/link",
   protect,
-  allowRoles("admin"),
+  allowRoles("school_admin"),
   validate(linkExistingParentSchema),
   linkExistingParent
 );

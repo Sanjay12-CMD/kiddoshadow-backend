@@ -2,6 +2,7 @@ import { Op, fn, col, literal } from "sequelize";
 import Attendance from "./attendance.model.js";
 import Parent from "../parents/parent.model.js";
 import AppError from "../../shared/appError.js";
+import TeacherClassSession from "../teacher-class-sessions/teacher-class-session.model.js";
 
 /* =========================
    TEACHER: ANALYTICS
@@ -9,6 +10,7 @@ import AppError from "../../shared/appError.js";
 export const getTeacherAttendanceAnalyticsService = async ({
   school_id,
   query,
+  teacher_id,
 }) => {
   const { from_date, to_date, class_id, section_id, student_id } = query || {};
 
@@ -22,6 +24,16 @@ export const getTeacherAttendanceAnalyticsService = async ({
     where.date = {};
     if (from_date) where.date[Op.gte] = from_date;
     if (to_date) where.date[Op.lte] = to_date;
+  }
+
+  if (teacher_id) {
+    const sessions = await TeacherClassSession.findAll({
+      where: { school_id, teacher_id },
+      attributes: ["id"],
+    });
+    const sessionIds = sessions.map((s) => s.id);
+    if (!sessionIds.length) return [];
+    where.teacher_class_session_id = { [Op.in]: sessionIds };
   }
 
   const stats = await Attendance.findAll({

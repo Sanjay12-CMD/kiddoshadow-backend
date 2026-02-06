@@ -1,12 +1,11 @@
 import AppError from "../appError.js";
-import Class from "../../modules/classes/classes.model.js";
-import Section from "../../modules/sections/section.model.js";
+import TeacherAssignment from "../../modules/teacher-assignments/teacher-assignment.model.js";
 
 /**
  * Admin OR class teacher of the given class
  */
 export const allowAdminOrClassTeacher = async (req, res, next) => {
-  if (req.user.role === "admin") return next();
+  if (req.user.role === "school_admin") return next();
 
   const classId =
     req.body.class_id ||
@@ -17,14 +16,17 @@ export const allowAdminOrClassTeacher = async (req, res, next) => {
     throw new AppError("class_id is required for permission check", 400);
   }
 
-  const cls = await Class.findOne({
+  const assignment = await TeacherAssignment.findOne({
     where: {
-      id: classId,
-      class_teacher_id: req.user.id,
+      class_id: classId,
+      teacher_id: req.user.teacher_id,
+      school_id: req.user.school_id,
+      is_class_teacher: true,
+      is_active: true,
     },
   });
 
-  if (!cls) {
+  if (!assignment) {
     throw new AppError(
       "You are not allowed to manage this class",
       403
@@ -42,7 +44,7 @@ export const allowAdminOrSectionClassTeacher = async (
   res,
   next
 ) => {
-  if (req.user.role === "admin") return next();
+  if (req.user.role === "school_admin") return next();
 
   const sectionId =
     req.body.section_id ||
@@ -56,17 +58,17 @@ export const allowAdminOrSectionClassTeacher = async (
     );
   }
 
-  const section = await Section.findOne({
-    where: { id: sectionId },
-    include: [
-      {
-        model: Class,
-        where: { class_teacher_id: req.user.id },
-      },
-    ],
+  const assignment = await TeacherAssignment.findOne({
+    where: {
+      section_id: sectionId,
+      teacher_id: req.user.teacher_id,
+      school_id: req.user.school_id,
+      is_class_teacher: true,
+      is_active: true,
+    },
   });
 
-  if (!section) {
+  if (!assignment) {
     throw new AppError(
       "You are not allowed to manage this section",
       403

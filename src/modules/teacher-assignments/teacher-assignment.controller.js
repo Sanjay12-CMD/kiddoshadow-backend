@@ -1,4 +1,5 @@
 import asyncHandler from "../../shared/asyncHandler.js";
+import AppError from "../../shared/appError.js";
 import * as service from "./teacher-assignment.service.js";
 
 /* ADMIN: CREATE ASSIGNMENT */
@@ -34,7 +35,14 @@ export const listAssignments = asyncHandler(async (req, res) => {
 
 /* TEACHER/ADMIN: GET TEACHER'S ASSIGNMENTS */
 export const getTeacherAssignments = asyncHandler(async (req, res) => {
-  const teacherId = req.params.teacherId || req.user.teacher_id;
+  const teacherId =
+    req.user.role === "teacher"
+      ? req.user.teacher_id
+      : req.params.teacherId;
+
+  if (!teacherId) {
+    throw new AppError("teacherId is required", 400);
+  }
 
   const assignments = await service.getTeacherAssignments({
     schoolId: req.user.school_id,

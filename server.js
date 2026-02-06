@@ -81,6 +81,11 @@ import teacherRoutes from "./src/modules/teachers/teacher.routes.js";
 import parentRoutes from "./src/modules/parents/parent.routes.js";
 import sectionRoutes from "./src/modules/sections/section.routes.js";
 import subjectRoutes from "./src/modules/subjects/subject.routes.js";
+import classRoutes from "./src/modules/classes/classes.routes.js";
+import timetableRoutes from "./src/modules/timetables/timetable.routes.js";
+import reportCardRoutes from "./src/modules/report-cards/report-card.routes.js";
+import examRoutes from "./src/modules/report-cards/exam.routes.js";
+import teacherDashboardRoutes from "./src/modules/teachers/teacher-dashboard.routes.js";
 
 import approvalRoutes from "./src/modules/approvals/approval.routes.js";
 import teacherApprovalRoutes from "./src/modules/teachers/teacher.approval.routes.js";
@@ -108,6 +113,7 @@ import teacherClassSessionRoutes from "./src/modules/teacher-class-sessions/teac
 import homeworkRoutes from "./src/modules/homework/homework.routes.js";
 import notificationRoutes from "./src/modules/notifications/notification.routes.js";
 import groupChatRoutes from "./src/modules/group-chat/group-chat.routes.js";
+import gameRoutes from "./src/modules/game/game.routes.js";
 
 
 
@@ -126,6 +132,11 @@ app.use("/api/teachers", teacherRoutes);
 app.use("/api/parents", parentRoutes);
 app.use("/api/sections", sectionRoutes);
 app.use("/api/subjects", subjectRoutes);
+app.use("/api/classes", classRoutes);
+app.use("/api/timetables", timetableRoutes);
+app.use("/api/report-cards", reportCardRoutes);
+app.use("/api/exams", examRoutes);
+app.use("/api", teacherDashboardRoutes);
 
 // approvals
 app.use("/api", approvalRoutes);
@@ -157,6 +168,7 @@ app.use("/api/teacher-class-sessions", teacherClassSessionRoutes);
 app.use("/api/homework", homeworkRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/group-chat", groupChatRoutes);
+app.use("/api/game", gameRoutes);
 
 
 // 404 + ERROR HANDLER

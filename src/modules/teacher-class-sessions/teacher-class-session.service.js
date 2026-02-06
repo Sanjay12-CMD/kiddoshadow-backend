@@ -56,6 +56,9 @@ export async function startSession({
   return TeacherClassSession.create({
     school_id,
     teacher_assignment_id,
+    teacher_id: assignment.teacher_id,
+    class_id: assignment.class_id,
+    section_id: assignment.section_id,
     timetable_id,
     started_at: new Date(),
   });
@@ -63,7 +66,7 @@ export async function startSession({
 export async function endSession({ session_id, user }) {
   const session = await TeacherClassSession.findByPk(session_id);
 
-  if (!session) {
+  if (!session || String(session.school_id) !== String(user.school_id)) {
     throw new AppError("SESSION_NOT_FOUND", 404);
   }
 

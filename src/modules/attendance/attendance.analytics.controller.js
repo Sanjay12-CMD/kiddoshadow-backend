@@ -11,6 +11,7 @@ export const getTeacherAttendanceAnalytics = async (req, res, next) => {
     const result = await getTeacherAttendanceAnalyticsService({
       school_id: req.user.school_id,
       query: req.query,
+      teacher_id: req.user.teacher_id,
     });
 
     res.json({ items: result });

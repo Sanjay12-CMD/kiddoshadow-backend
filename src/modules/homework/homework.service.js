@@ -29,6 +29,7 @@ export const createHomeworkService = async ({
     where: {
       id: teacher_assignment_id,
       school_id,
+      class_id,
       section_id,
       is_active: true,
     },

@@ -23,6 +23,21 @@ const Class = db.define(
       type: DataTypes.STRING,
       allowNull: false,
     },
+
+    class_teacher_id: {
+      type: DataTypes.BIGINT,
+      allowNull: true,
+      references: {
+        model: "teachers",
+        key: "id",
+      },
+    },
+
+    is_active: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: true,
+    },
   },
   {
     tableName: "classes",

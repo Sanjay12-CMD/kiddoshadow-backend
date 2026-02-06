@@ -13,16 +13,11 @@ export const createNotificationService = async ({
   section_id,
 }) => {
   /* Role enforcement */
-  if (sender_role === "teacher") {
-    if (target_role === "teacher") {
-      throw new AppError(
-        "Teachers cannot notify other teachers",
-        403
-      );
-    }
+  if (sender_role === "teacher" && target_role === "teacher") {
+    throw new AppError("Teachers cannot notify other teachers", 403);
   }
 
-  if (sender_role !== "admin" && sender_role !== "teacher") {
+  if (sender_role !== "school_admin" && sender_role !== "teacher") {
     throw new AppError("Not allowed to send notifications", 403);
   }
 
@@ -44,26 +39,32 @@ export const createNotificationService = async ({
 export const listNotificationsForUserService = async ({
   school_id,
   user_role,
-  class_id,
-  section_id,
+  class_ids = [],
+  section_ids = [],
 }) => {
-  const where = { school_id, target_role: user_role };
+  const roleTargets =
+    user_role === "teacher" ? [user_role] : [user_role, "all"];
+
+  const where = {
+    school_id,
+    target_role: { [Op.in]: roleTargets },
+  };
   const orConditions = [];
 
   // Notifications with no class/section targeting (broadcast to all in role)
   orConditions.push({ class_id: null });
 
-  if (class_id) {
-    orConditions.push({ class_id });
+  if (class_ids.length) {
+    orConditions.push({ class_id: { [Op.in]: class_ids } });
   }
 
   where[Op.or] = orConditions;
 
-  if (section_id) {
-    where[Op.or].push({ section_id });
+  if (section_ids.length) {
+    where[Op.or].push({ section_id: { [Op.in]: section_ids } });
   }
 
-  return Notification.findAll({
+  return Notification.findAndCountAll({
     where,
     order: [["created_at", "DESC"]],
   });

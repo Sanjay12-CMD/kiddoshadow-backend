@@ -10,7 +10,7 @@ export const approvalGate = async (req, res, next) => {
   const { role, id: user_id, school_id } = req.user;
 
   // Admins are always allowed
-  if (role === "admin") return next();
+  if (role === "school_admin") return next();
 
   // STUDENT
   if (role === "student") {

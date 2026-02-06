@@ -10,7 +10,7 @@ const router = express.Router();
 router.get(
     "/admin/audit-logs",
     protect,
-    allowRoles("admin"),
+    allowRoles("school_admin"),
     validate(listAuditLogsSchema),
     listAuditLogs
 );

@@ -26,8 +26,10 @@ export const createExamService = async ({
   return exam;
 };
 
-export const lockExamService = async ({ exam_id }) => {
-  const exam = await Exam.findByPk(exam_id);
+export const lockExamService = async ({ exam_id, school_id }) => {
+  const exam = await Exam.findOne({
+    where: { id: exam_id, school_id },
+  });
   if (!exam) throw new AppError("EXAM_NOT_FOUND", 404);
 
   exam.is_locked = true;

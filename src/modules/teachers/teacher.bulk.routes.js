@@ -11,7 +11,7 @@ const router = express.Router();
 router.post(
   "/admin/teachers/bulk-approve",
   protect,
-  allowRoles("admin"),
+  allowRoles("school_admin"),
   validate(bulkApproveTeachersSchema),
   bulkApproveTeachers
 );

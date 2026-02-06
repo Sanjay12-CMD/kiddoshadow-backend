@@ -22,34 +22,34 @@ router.use(protect);
 /* ADMIN: CREATE ASSIGNMENT */
 router.post(
   "/",
-  allowRoles("admin"),
+  allowRoles("school_admin"),
   validate(assignTeacherSchema),
   assignTeacher
 );
 
 /* ADMIN: LIST ALL ASSIGNMENTS */
-router.get("/", allowRoles("admin"), listAssignments);
+router.get("/", allowRoles("school_admin"), listAssignments);
 
 /* TEACHER/ADMIN: GET TEACHER'S ASSIGNMENTS */
 router.get(
   "/teacher/:teacherId",
-  allowRoles("admin", "teacher"),
+  allowRoles("school_admin", "teacher"),
   getTeacherAssignments
 );
 
 /* ADMIN: GET SECTION ASSIGNMENTS */
-router.get("/section/:sectionId", allowRoles("admin"), getSectionAssignments);
+router.get("/section/:sectionId", allowRoles("school_admin"), getSectionAssignments);
 
 /* ADMIN: UPDATE ASSIGNMENT */
 router.patch(
   "/:id",
-  allowRoles("admin"),
+  allowRoles("school_admin"),
   validate(updateTeacherAssignmentSchema),
   updateAssignment
 );
 
 /* ADMIN: DELETE ASSIGNMENT */
-router.delete("/:id", allowRoles("admin"), deleteAssignment);
+router.delete("/:id", allowRoles("school_admin"), deleteAssignment);
 
 export default router;
 
