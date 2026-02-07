@@ -12,6 +12,7 @@ import {
 import {
   createParentAndLink,
   linkExistingParent,
+  listParents,
   updateParentProfile,
   getMyProfile,
 } from "./parent.controller.js";
@@ -35,6 +36,13 @@ router.post(
   allowRoles("school_admin"),
   validate(linkExistingParentSchema),
   linkExistingParent
+);
+
+router.get(
+  "/parents",
+  protect,
+  allowRoles("school_admin"),
+  listParents
 );
 
 /* =========================

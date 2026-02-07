@@ -44,6 +44,14 @@ export const bulkApproveParentsService = async ({
         id: parent_ids,
         approval_status: "pending",
       },
+      include: [
+        {
+          model: User,
+          required: true,
+          where: { school_id },
+          attributes: ["id"],
+        },
+      ],
       transaction: t,
     });
 
@@ -60,7 +68,7 @@ export const bulkApproveParentsService = async ({
         approved_at: new Date(),
       },
       {
-        where: { id: parent_ids, approval_status: "pending" },
+        where: { id: parents.map((p) => p.id), approval_status: "pending" },
         transaction: t,
       }
     );

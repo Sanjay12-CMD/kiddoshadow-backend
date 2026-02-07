@@ -16,10 +16,14 @@ export const createStudent = asyncHandler(async (req, res) => {
   const result = await createStudentService({
     school_id: req.user.school_id,
     class_id: req.body.class_id,
-    sections: req.body.sections,
+    section_id: req.body.section_id,
   });
 
-  res.status(201).json({ created: result.length, students: result });
+  res.status(201).json({
+    created: 1,
+    student: result,
+    students: [result],
+  });
 });
 
 /* ADMIN: LIST */

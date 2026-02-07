@@ -26,7 +26,6 @@ export const getTeacherDashboardService = async ({
     where: {
       school_id,
       teacher_id,
-      is_class_teacher: true,
       is_active: true,
     },
     attributes: ["class_id", "section_id"],
@@ -51,23 +50,29 @@ export const getTeacherDashboardService = async ({
     : [];
 
   /* 2️⃣ Timetable (today) */
-  const timetable = await Timetable.findAll({
-    where: {
-      school_id,
-      class_id: classIds,
-      day_of_week: day,
-    },
-    order: [["start_time", "ASC"]],
-  });
+  const timetable = classIds.length
+    ? await Timetable.findAll({
+        where: {
+          school_id,
+          class_id: classIds,
+          section_id: sectionIds,
+          day_of_week: day,
+        },
+        order: [["start_time", "ASC"]],
+      })
+    : [];
 
   /* 3️⃣ Homework (today) */
-  const homework = await Homework.findAll({
-    where: {
-      school_id,
-      class_id: classIds,
-      homework_date: today,
-    },
-  });
+  const homework = classIds.length
+    ? await Homework.findAll({
+        where: {
+          school_id,
+          class_id: classIds,
+          section_id: sectionIds,
+          homework_date: today,
+        },
+      })
+    : [];
 
   const homeworkIds = homework.map((h) => h.id);
 
@@ -112,12 +117,14 @@ export const getTeacherDashboardService = async ({
   );
 
   /* 5️⃣ Pending report cards */
-  const pendingReportCards = await ReportCard.count({
-    where: {
-      class_id: classIds,
-      published_at: null,
-    },
-  });
+  const pendingReportCards = classIds.length
+    ? await ReportCard.count({
+        where: {
+          class_id: classIds,
+          published_at: null,
+        },
+      })
+    : 0;
 
   return {
     classes,

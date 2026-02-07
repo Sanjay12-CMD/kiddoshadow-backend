@@ -1,5 +1,6 @@
 import asyncHandler from "../../shared/asyncHandler.js";
 import AppError from "../../shared/appError.js";
+import TeacherAssignment from "./teacher-assignment.model.js";
 import * as service from "./teacher-assignment.service.js";
 
 /* ADMIN: CREATE ASSIGNMENT */
@@ -57,6 +58,22 @@ export const getTeacherAssignments = asyncHandler(async (req, res) => {
 
 /* ADMIN: GET SECTION ASSIGNMENTS */
 export const getSectionAssignments = asyncHandler(async (req, res) => {
+  if (req.user.role === "teacher") {
+    const canManage = await TeacherAssignment.findOne({
+      where: {
+        school_id: req.user.school_id,
+        section_id: req.params.sectionId,
+        teacher_id: req.user.teacher_id,
+        is_class_teacher: true,
+        is_active: true,
+      },
+    });
+
+    if (!canManage) {
+      throw new AppError("FORBIDDEN", 403);
+    }
+  }
+
   const assignments = await service.getSectionAssignments({
     schoolId: req.user.school_id,
     sectionId: req.params.sectionId,

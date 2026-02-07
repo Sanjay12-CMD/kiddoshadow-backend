@@ -3,10 +3,15 @@ import GameSession from "./game-session.model.js";
 import GameSessionPlayer from "./game-session-player.model.js";
 import PlayerAnswer from "./player-answer.model.js";
 import QuizQuestion from "../quiz/quiz-question.model.js";
+import { generateQuizFromAi } from "../quiz/quiz-rag.service.js";
 import { isTimeOver } from "./game.utils.js";
 import AppError from "../../shared/appError.js";
 import asyncHandler from "../../shared/asyncHandler.js";
 import db from "../../config/db.js";
+
+function generateRoomCode() {
+  return Math.random().toString(36).substring(2, 7).toUpperCase();
+}
 
 export const submitSinglePlayerQuiz = asyncHandler(async (req, res) => {
   const { playerId, answers } = req.body;
@@ -90,6 +95,79 @@ export const startSinglePlayerQuiz = asyncHandler(async (req, res) => {
   res.json({ sessionId: session.id, playerId: player.id });
 });
 
+export const createMultiplayerQuiz = asyncHandler(async (req, res) => {
+  const {
+    topic,
+    classLevel,
+    difficulty,
+    numQuestions,
+    roomCode,
+    maxPlayers,
+    timeLimitMinutes,
+  } = req.body;
+
+  if (!topic) {
+    throw new AppError("Topic required", 400);
+  }
+
+  const quizResult = await generateQuizFromAi({
+    user: req.user,
+    topic,
+    classLevel,
+    difficulty,
+    numQuestions,
+  });
+
+  let code = roomCode ? String(roomCode).toUpperCase() : null;
+
+  if (code) {
+    const existing = await GameSession.findOne({
+      where: { room_code: code },
+    });
+    if (existing) {
+      throw new AppError("Room code already in use", 409);
+    }
+  } else {
+    for (let i = 0; i < 5; i++) {
+      const candidate = generateRoomCode();
+      const existing = await GameSession.findOne({
+        where: { room_code: candidate },
+      });
+      if (!existing) {
+        code = candidate;
+        break;
+      }
+    }
+  }
+
+  if (!code) {
+    throw new AppError("Unable to allocate room code", 500);
+  }
+
+  const perQuestionMs = 30000;
+  const totalQuestions =
+    quizResult.questions?.length || numQuestions || 5;
+  const totalTimeMs = timeLimitMinutes
+    ? timeLimitMinutes * 60 * 1000
+    : totalQuestions * perQuestionMs;
+
+  const session = await GameSession.create({
+    quiz_id: quizResult.quizId,
+    mode: "MULTI",
+    room_code: code,
+    host_user_id: req.user.id,
+    max_players: maxPlayers ?? null,
+    total_time_ms: totalTimeMs,
+    status: "LOBBY",
+  });
+
+  res.json({
+    sessionId: session.id,
+    roomCode: code,
+    quizId: quizResult.quizId,
+  });
+});
+
 export const getLeaderboard = asyncHandler(async (req, res) => {
   const { sessionId } = req.params;
 
@@ -105,9 +183,10 @@ export const getLeaderboard = asyncHandler(async (req, res) => {
 
 export const joinMultiplayerQuiz = asyncHandler(async (req, res) => {
   const { roomCode } = req.body;
+  const normalizedCode = roomCode ? String(roomCode).toUpperCase() : "";
 
   const session = await GameSession.findOne({
-    where: { room_code: roomCode },
+    where: { room_code: normalizedCode },
   });
 
   if (!session) {

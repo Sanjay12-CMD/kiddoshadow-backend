@@ -29,17 +29,24 @@ router.post(
 router.get("/me", protect, getMyProfile);
 
 /* admin */
-router.use(protect, allowRoles("school_admin"));
-
 router.post(
   "/",
+  protect,
+  allowRoles("school_admin"),
   createTeacher
 );
 
-router.get("/", listTeachers);
+router.get(
+  "/",
+  protect,
+  allowRoles("school_admin"),
+  listTeachers
+);
 
 router.patch(
   "/:id/status",
+  protect,
+  allowRoles("school_admin"),
   validate(updateTeacherStatusSchema),
   updateTeacherStatus
 );

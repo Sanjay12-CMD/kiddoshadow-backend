@@ -38,7 +38,7 @@ router.get(
 );
 
 /* ADMIN: GET SECTION ASSIGNMENTS */
-router.get("/section/:sectionId", allowRoles("school_admin"), getSectionAssignments);
+router.get("/section/:sectionId", allowRoles("school_admin", "teacher"), getSectionAssignments);
 
 /* ADMIN: UPDATE ASSIGNMENT */
 router.patch(

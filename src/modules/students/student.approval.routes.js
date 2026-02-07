@@ -5,12 +5,10 @@ import { validate } from "../../shared/middlewares/validate.js";
 
 import {
   requestStudentProfileUpdateSchema,
-  approveStudentProfileSchema,
 } from "./student.approval.schema.js";
 
 import {
   requestStudentProfileUpdate,
-  approveStudentProfile,
 } from "./student.approval.controller.js";
 
 const router = express.Router();
@@ -22,15 +20,6 @@ router.patch(
   allowRoles("student"),
   validate(requestStudentProfileUpdateSchema),
   requestStudentProfileUpdate
-);
-
-/* TEACHER */
-router.post(
-  "/teachers/students/:student_id/approve",
-  protect,
-  allowRoles("teacher"),
-  validate(approveStudentProfileSchema),
-  approveStudentProfile
 );
 
 export default router;

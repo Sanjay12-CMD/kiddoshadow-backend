@@ -114,26 +114,43 @@ export const bulkCreateDataService = async ({
            STUDENTS & PARENTS
     ================================= */
     for (const classData of classEntries) {
-      const newClass = await Class.create(
-        {
+      const [dbClass, classCreated] = await Class.findOrCreate({
+        where: {
           school_id,
           class_name: classData.name,
         },
-        { transaction: t }
-      );
+        defaults: {
+          school_id,
+          class_name: classData.name,
+        },
+        transaction: t,
+        lock: t.LOCK.UPDATE,
+      });
 
-      response.summary.classes_created++;
+      if (classCreated) {
+        response.summary.classes_created++;
+      }
 
       for (const sectionData of classData.sections) {
-        const newSection = await Section.create(
-          {
+        const [dbSection] = await Section.findOrCreate({
+          where: {
             school_id,
-            class_id: newClass.id,
+            class_id: dbClass.id,
+            name: sectionData.name,
+          },
+          defaults: {
+            school_id,
+            class_id: dbClass.id,
             name: sectionData.name,
             is_active: true,
           },
-          { transaction: t }
-        );
+          transaction: t,
+          lock: t.LOCK.UPDATE,
+        });
+
+        if (!dbSection.is_active) {
+          await dbSection.update({ is_active: true }, { transaction: t });
+        }
 
         const existingStudentCount = await Student.count({
           where: { school_id },
@@ -144,7 +161,7 @@ export const bulkCreateDataService = async ({
           const serial = existingStudentCount + response.summary.students_created + 1;
           const stuUsername = buildStudentUsername(
             school_id,
-            newSection.id,
+            dbSection.id,
             serial
           );
 
@@ -165,8 +182,8 @@ export const bulkCreateDataService = async ({
             {
               user_id: stuUser.id,
               school_id,
-              class_id: newClass.id,
-              section_id: newSection.id,
+              class_id: dbClass.id,
+              section_id: dbSection.id,
               admission_no: `ADM-${stuUsername}`,
               approval_status: "pending",
               is_active: true,

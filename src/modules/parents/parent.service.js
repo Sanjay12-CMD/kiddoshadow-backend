@@ -3,6 +3,7 @@ import User from "../users/user.model.js";
 import Parent from "./parent.model.js";
 import Student from "../students/student.model.js";
 import AppError from "../../shared/appError.js";
+import { getPagination } from "../../shared/utils/pagination.js";
 
 /* =========================
    ADMIN: CREATE PARENT + LINK
@@ -150,4 +151,40 @@ export const updateParentProfileService = async (user_id, data) => {
 
   await user.update(data);
   return user;
+};
+
+/* =========================
+   ADMIN: LIST PARENTS (SCHOOL)
+========================= */
+export const listParentsService = async ({ school_id, query }) => {
+  const { limit, offset } = getPagination(query);
+  const safeQuery = query || {};
+
+  const where = {};
+  const status = safeQuery.approval_status;
+  if (["pending", "approved", "rejected"].includes(status)) {
+    where.approval_status = status;
+  }
+
+  return Parent.findAndCountAll({
+    where,
+    include: [
+      {
+        model: User,
+        required: true,
+        where: { school_id },
+        attributes: ["id", "username", "name", "phone", "is_active"],
+      },
+      {
+        model: Student,
+        required: true,
+        where: { school_id },
+        attributes: ["id", "class_id", "section_id", "user_id"],
+      },
+    ],
+    limit,
+    offset,
+    distinct: true,
+    order: [["created_at", "DESC"]],
+  });
 };

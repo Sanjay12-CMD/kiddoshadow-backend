@@ -10,7 +10,7 @@ import {
 export const getTeacherPendingApprovals = async (req, res, next) => {
   try {
     const result = await getPendingStudentApprovalsService({
-      school_id: req.user.school_id,
+      user: req.user,
       class_id: req.query.class_id,
       query: req.query,
     });
@@ -31,11 +31,11 @@ export const getAdminPendingApprovals = async (req, res, next) => {
   try {
     const [teachers, parents] = await Promise.all([
       getPendingTeacherApprovalsService({
-        school_id: req.user.school_id,
+        user: req.user,
         query: req.query,
       }),
       getPendingParentApprovalsService({
-        school_id: req.user.school_id, // ✅ FIXED
+        user: req.user, // FIXED: school scoped
         query: req.query,
       }),
     ]);

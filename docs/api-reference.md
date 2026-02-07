@@ -1,355 +1,578 @@
-# Kiddo Backend API (Feb 6, 2026)
+API Reference (Frontend)
 
-Base URL: `/api` unless noted. Auth: Bearer JWT from `/auth/login`. `school_id` is enforced server-side from `req.user`.
+Base
+Base URL: `/api`
+Auth: `Authorization: Bearer <token>` (all protected routes)
+School scope: derived from `req.user.school_id` unless explicitly noted (super_admin endpoints).
+Pagination: `limit`, `offset` (query) where supported.
 
-## Quick Endpoint Details (route, payload, response)
+Auth
+POST `/api/auth/login`
+Roles: Public
+Request: `{ "username": "string", "password": "string" }`
+Response: `{ "token": "jwt" }`
 
-- **Auth**
-  - POST `/auth/login` — Body `{ username, password }` → `{ token }`
-  - POST `/auth/change-password` — Body `{ old_password, new_password }` → `{ message }`
+POST `/api/auth/change-password`
+Roles: Any authenticated user
+Request: `{ "old_password": "string", "new_password": "string" }`
+Response: `{ "message": "Password updated successfully" }`
 
-- **Schools (super_admin)**
-  - POST `/schools` — `{ name, code, cbse_affiliation_no, address, city, state, zip, email, admin_username, admin_password }` → `{ school, admin:{ username } }`
-  - GET `/schools` — Query `{ limit?, offset? }` → `{ count, rows }`
-  - PATCH `/schools/:id/status` — `{ status }` → `{ message, school }`
-  - PATCH `/schools/:id/admin-status` — `{ is_active }` → `{ message, admin }`
-  - PATCH `/schools/:id/admin-reset-password` — `{ new_password }` → `{ message, admin }`
+Schools (super_admin)
+POST `/api/schools`
+Roles: super_admin
+Request: `{ name, code, cbse_affiliation_no, address, city, state, zip, email, admin_username, admin_password }`
+Response: `{ school, admin }` (from service)
 
-- **Classes**
-  - POST `/classes` — `{ class_name, class_teacher_id? }` → `{ success, data }`
-  - GET `/classes` — → `{ total, items }`
-  - GET `/classes/:id` — → `{ success, data }`
-  - PATCH `/classes/:id` — `{ class_name?, is_active?, class_teacher_id? }` → `{ success, data }`
-  - DELETE `/classes/:id` — → `{ success, message }`
+GET `/api/schools`
+Roles: super_admin
+Query: `limit`, `offset`, optional filters (see service)
+Response: `{ count, rows }`
 
-- **Sections**
-  - POST `/sections` — `{ class_id, name }` → `{ success, data }`
-  - GET `/sections/classes/:class_id/sections` — → `{ total, items }`
-  - PATCH `/sections/:id/status` — `{ is_active }` → `{ success, data }`
+PATCH `/api/schools/:id/status`
+Roles: super_admin
+Request: `{ "status": "pending|active|suspended|expired" }`
+Response: `{ "message": "Status updated", "school": { ... } }`
 
-- **Subjects**
-  - POST `/subjects` — `{ name }` → `{ success, data }`
-  - GET `/subjects` — → `{ success, data }`
-  - PATCH `/subjects/:id` — `{ name }` → `{ success, data }`
-  - DELETE `/subjects/:id` — → `{ success, message }`
+PATCH `/api/schools/:id/admin-status`
+Roles: super_admin
+Request: `{ "is_active": true|false }`
+Response: `{ "message": "School admin status updated", "admin": { ... } }`
 
-- **Students**
-  - POST `/students` — `{ class_id, section_id }` → `{ created, students }`
-  - GET `/students` — Query pagination → `{ total, items }`
-  - PATCH `/students/:id/move` — `{ section_id }` → `{ message, student }`
-  - PATCH `/students/:id/status` — `{ is_active }` → `{ message, student }`
-  - POST `/students/assign-section` — `{ target_class_id, target_section_id, students:[{ student_id, roll_no }] }` → `{ success, message }`
-  - POST `/students/complete-profile` — profile fields → `{ message, token, user }`
-  - GET `/students/me` — → `Student + class/section`
-  - GET `/students/dashboard` — → `{ success, data }`
+PATCH `/api/schools/:id/admin-reset-password`
+Roles: super_admin
+Request: `{ "new_password": "string" }`
+Response: `{ "message": "Password reset", "admin": { username } }`
 
-- **Teachers**
-  - POST `/teachers` — `{ username, password }` → `{ teacher_id, username, employee_id, password_hint }`
-  - GET `/teachers` — pagination → `{ total, items }`
-  - PATCH `/teachers/:id/status` — `{ is_active }` → `{ message, teacher }`
-  - POST `/teachers/complete-profile` — profile fields → `{ message, token, user }`
-  - GET `/teachers/me` — → `Teacher with user`
-  - GET `/teachers/dashboard` — → `{ success, data }`
+Subscriptions (super_admin)
+POST `/api/subscriptions`
+Roles: super_admin
+Request: `{ "schoolId": number, "status": "active|inactive|...", "startDate": "YYYY-MM-DD", "endDate": "YYYY-MM-DD", "notes": "string" }`
+Response: `{ "message": "Subscription updated", "subscription": { ... } }`
 
-- **Parents**
-  - POST `/parents/parents` — `{ student_id, relation_type }` → `{ parent_user_id, student_id }`
-  - POST `/parents/parents/link` — `{ parent_user_id, student_id, relation_type }` → `{ parent_user_id, student_id }`
-  - PATCH `/parents/parents/profile` — `{ name?, phone? }` → `{ message, token, user }`
-  - GET `/parents/parents/profile` — → `req.user`
-  - GET `/parents/parents/children` — pagination → `{ success, total, data:[{ relation_type, student }] }`
-  - GET `/parents/parents/dashboard` — → `{ success, data }`
+Classes
+POST `/api/classes`
+Roles: school_admin
+Request: `{ "class_name": "string" }`
+Response: `{ "success": true, "data": { ... } }`
 
-- **Approvals**
-  - GET `/teachers/approvals/pending` — query filters → `{ total, items }`
-  - POST `/teachers/approvals/:type/:id/:action` — `{ rejection_reason? }` → `{ message, result }`
-  - GET `/admin/approvals/pending` — → `{ teachers:{ total, items }, parents:{ total, items } }`
-  - POST `/admin/approvals/:type/:id/:action` — `{ rejection_reason? }` → `{ message, result }`
-  - Teacher profile: PATCH `/teachers/profile/request` → `{ message }`; POST `/admin/teachers/:teacher_id/approve` → `{ teacher_id, status }`
-  - Student profile: PATCH `/students/profile/request` → `{ message }`; POST `/teachers/students/:student_id/approve` → `{ student_id, status }`
-  - Parent approval: POST `/teachers/parents` → `{ parent_id, message }`; POST `/admin/parents/:parent_id/approve` → `{ parent_id, status }`
-  - Bulk approvals: POST `/admin/teachers/bulk-approve` or `/admin/parents/bulk-approve` — `{ ids, action }` → `{ processed }`
+GET `/api/classes`
+Roles: school_admin, teacher
+Response: `{ "total": number, "items": [ { class + sections } ] }`
 
-- **Teacher Assignments (school_admin)**
-  - POST `/teacher-assignments` — `{ teacher_id, class_id, section_id, subject_id, is_class_teacher? }` → `{ success, data }`
-  - GET `/teacher-assignments` — pagination → `{ success, total, items }`
-  - GET `/teacher-assignments/teacher/:teacherId` — → `{ success, data }`
-  - GET `/teacher-assignments/section/:sectionId` — → `{ success, data }`
-  - PATCH `/teacher-assignments/:id` — `{ is_active?, is_class_teacher? }` → `{ success, data }`
-  - DELETE `/teacher-assignments/:id` — → `{ success, message }`
+GET `/api/classes/login-roster`
+Roles: school_admin
+Query: `class_id` (optional), `section_id` (optional)
+Response: `{ "success": true, "data": { "teachers": [...], "classes": [...] } }`
 
-- **Timetables**
-  - POST `/timetables` — `{ class_id, section_id, day_of_week, entries:[{ start_time,end_time,is_break,title?,teacher_assignment_id? }] }` → `{ success, message }`
-  - GET `/timetables/section` — Query `{ class_id, section_id }` → `{ success, data }`
-  - GET `/timetables/teacher/me` — → `{ success, data }`
+GET `/api/classes/:id`
+Roles: school_admin, teacher
+Response: `{ "success": true, "data": { ... } }`
 
-- **Attendance**
-  - POST `/teachers/attendance` — `{ teacher_class_session_id, records:[{ student_id, status }] }` → `{ success, message }`
-  - GET `/teachers/attendance/summary` — filters → `{ total, items }`
-  - GET `/parents/attendance/summary` — → `{ total, items }`
-  - GET `/students/attendance/summary` — → `{ total, items }`
-  - GET `/teachers/attendance/analytics` — → `{ items }`
-  - GET `/parents/attendance/analytics` — → `{ items }`
+PATCH `/api/classes/:id`
+Roles: school_admin
+Request: `{ "class_name": "string" }`
+Response: `{ "success": true, "data": { ... } }`
 
-- **Teacher Class Sessions**
-  - POST `/teacher-class-sessions/start` — `{ teacher_assignment_id, timetable_id? }` → `{ success, data }`
-  - POST `/teacher-class-sessions/:id/end` — → `{ success, data }`
+DELETE `/api/classes/:id`
+Roles: school_admin
+Response: `{ "success": true, "message": "Class deleted successfully" }`
 
-- **Homework**
-  - POST `/homework` — `{ class_id, section_id, teacher_assignment_id, homework_date, description }` → `{ success, data }`
-  - GET `/homework` — filters → `{ success, total, items }`
-  - POST `/homework/:homework_id/submit` — `{ is_completed, remark? }` → `{ success, data }`
-  - GET `/homework/analytics/summary` — → `{ success, data }`
-  - GET `/homework/analytics/:homework_id/students` — → `{ success, data }`
+Sections
+POST `/api/sections`
+Roles: school_admin
+Request: `{ "class_id": number, "name": "string" }`
+Response: `{ "success": true, "data": { ... } }`
 
-- **Notifications**
-  - POST `/notifications` — `{ title, message, target_role, class_id?, section_id? }` → `{ success, data }`
-  - GET `/notifications` — auto-filtered → `{ success, total, items }`
-  - POST `/notifications/:id/acknowledge` — → `{ success, message }`
-  - GET `/notifications/:id/acknowledgements` — → `{ success, data }`
+GET `/api/sections/classes/:class_id/sections`
+Roles: school_admin, teacher
+Response: `{ "total": number, "items": [ { ... } ] }`
 
-- **Group Chat**
-  - POST `/group-chat` — `{ subjectId, sectionId }` → `{ chatId }`
-  - GET `/group-chat` — → `[ { chatId, role, subject, class, section, created_at } ]`
-  - GET `/group-chat/:chatId/messages` — → `[ { id, sender_id, sender_name, avatar, content, type, created_at } ]`
+PATCH `/api/sections/:id/status`
+Roles: school_admin
+Request: `{ "is_active": true|false }`
+Response: `{ "success": true, "data": { ... } }`
 
-- **AI & RAG**
-  - POST `/rag/ask` — `{ question, classLevel? }` (+ `voice=true` for audio) → `{ question, answer, sources }` or wav stream
-  - POST `/teacher/ai` — `{ aiType, payload }` → `{ aiType, result }`
-  - GET `/analytics/ai/school` — → analytics object
-  - GET `/analytics/ai/teacher` — → analytics object
-  - GET `/analytics/ai/student` — → analytics object
+Subjects
+POST `/api/subjects`
+Roles: school_admin
+Request: `{ "name": "string" }`
+Response: `{ "success": true, "data": { ... } }`
 
-- **Report Cards & Exams**
-  - POST `/report-cards` — `{ student_id, exam_id }` → `{ success, data }`
-  - POST `/report-cards/:id/marks` — `{ marks:[{ subject_id, marks_obtained, max_marks }] }` → `{ success, message }`
-  - POST `/report-cards/:id/publish` — `{ remarks? }` → `{ success, data }`
-  - GET `/report-cards/student/list` — → `{ success, data }`
-  - GET `/report-cards/:id` — → `{ success, data }`
-  - POST `/exams` — `{ class_id, name, start_date, end_date }` → `{ success, data }`
-  - POST `/exams/:id/lock` — `{}` → `{ success, data }`
-  - GET `/exams` — query `{ class_id, limit?, offset? }` → `{ success, total, items }`
+GET `/api/subjects`
+Roles: school_admin, teacher
+Response: `{ "total": number, "items": [ { ... } ] }`
 
-- **Bulk (school_admin)**
-  - POST `/bulk/bulk-create` or `/bulk/create` — `{ classes, teacher_count?, students_per_section? }` → seeded data summary
-  - POST `/admin/teachers/bulk-approve` — `{ teacher_ids, action }` → `{ processed }`
-  - POST `/admin/parents/bulk-approve` — `{ parent_ids, action }` → `{ processed }`
+PATCH `/api/subjects/:id`
+Roles: school_admin
+Request: `{ "name": "string" }`
+Response: `{ "success": true, "data": { ... } }`
 
-- **Subscriptions (super_admin)**
-  - POST `/subscriptions` — `{ schoolId, status, startDate?, endDate?, notes? }` → `{ message, subscription }`
+DELETE `/api/subjects/:id`
+Roles: school_admin
+Response: `{ "success": true, "message": "Subject deleted successfully" }`
 
-- **Game**
-  - POST `/game/quiz/single/start` — `{ quizId, timeLimitMinutes }` → `{ sessionId, playerId }`
-  - POST `/game/quiz/single/submit` — `{ playerId, answers:[{ questionId, selectedIndex }] }` → `{ score, total }`
-  - GET `/game/quiz/:sessionId/leaderboard` — → leaderboard array
-  - POST `/game/quiz/multi/join` — `{ roomCode }` → `{ sessionId, playerId }`
+Students (admin)
+POST `/api/students`
+Roles: school_admin
+Request: `{ "class_id": number, "section_id": number }`
+Response: `{ "created": 1, "student": { ... }, "students": [ ... ] }`
 
-- **Dashboards**
-  - GET `/teachers/dashboard` — → `{ success, data }` (classes, timetable, homework_summary, pending_report_cards)
-  - GET `/students/dashboard` — → `{ success, data }`
-  - GET `/parents/parents/dashboard` — → `{ success, data }`
+GET `/api/students`
+Roles: school_admin
+Query: `limit`, `offset`
+Response: `{ "total": number, "items": [ { student + user + class + section } ] }`
 
-## Schools (super_admin)
-- `POST /schools` create school+admin — body `{ name, code, cbse_affiliation_no, address, city, state, zip, email, admin_username, admin_password }`
-- `GET /schools` list — query `{ limit?, offset? }`
-- `PATCH /schools/:id/status` — body `{ status: pending|active|suspended|expired }`
-- `PATCH /schools/:id/admin-status` — body `{ is_active }`
-- `PATCH /schools/:id/admin-reset-password` — body `{ new_password }`
+PATCH `/api/students/:id/move`
+Roles: school_admin
+Request: `{ "section_id": number }`
+Response: `{ "message": "Student moved", "student": { ... } }`
 
-## Classes & Sections
-- `POST /classes` (school_admin) — `{ class_name, class_teacher_id? }`
-- `GET /classes` (school_admin|teacher)
-- `GET /classes/:id` (school_admin|teacher)
-- `PATCH /classes/:id` (school_admin) — `{ class_name?, is_active?, class_teacher_id? }`
-- `DELETE /classes/:id` (school_admin)
-- `POST /sections` (school_admin) — `{ class_id, name }`
-- `GET /sections/classes/:class_id/sections` (school_admin|teacher)
-- `PATCH /sections/:id/status` (school_admin) — `{ is_active }`
+PATCH `/api/students/:id/status`
+Roles: school_admin
+Request: `{ "is_active": true|false }`
+Response: `{ "message": "Status updated", "student": { ... } }`
 
-## Subjects (school_admin)
-- `POST /subjects` — `{ name }`
-- `GET /subjects`
-- `PATCH /subjects/:id` — `{ name }`
-- `DELETE /subjects/:id`
+POST `/api/students/assign-section`
+Roles: school_admin
+Request: `{ "target_class_id": number, "target_section_id": number, "students": [ { "student_id": number, "roll_no": number } ] }`
+Response: `{ "success": true, "message": "Students assigned successfully" }`
 
-## Students
-- `POST /students` (school_admin) — `{ class_id, section_id }` auto-creates login
-- `GET /students` (school_admin) — pagination via query
-- `PATCH /students/:id/move` (school_admin) — `{ section_id }`
-- `PATCH /students/:id/status` (school_admin) — `{ is_active }`
-- `POST /students/assign-section` (school_admin) — `{ target_class_id, target_section_id, students:[{ student_id, roll_no }] }`
-- `POST /students/complete-profile` (student) — profile fields
-- `GET /students/me` (student)
-- `GET /students/dashboard` (student) — attendance %, tokens mock, etc.
+Students (self)
+POST `/api/students/complete-profile`
+Roles: student
+Request: `{ name, phone?, email?, dob?, gender?, blood_group?, father_name?, mother_name?, guardian_name?, father_occupation?, mother_occupation?, address?, family_income? }`
+Response: `{ "message": "Profile completed", "token": "jwt", "user": { ... } }`
 
-## Teachers
-- `POST /teachers` (school_admin) — `{ username, password }` auto builds IDs
-- `GET /teachers` (school_admin)
-- `PATCH /teachers/:id/status` (school_admin) — `{ is_active }`
-- `POST /teachers/complete-profile` (teacher) — profile fields
-- `GET /teachers/me` (teacher)
-- `GET /teachers/dashboard` (teacher) — timetable/homework/report-card metrics
+GET `/api/students/me`
+Roles: student
+Response: `{ student + class + section }`
 
-## Parents
-- `POST /parents/parents` (school_admin) — `{ student_id, relation_type }`
-- `POST /parents/parents/link` (school_admin) — `{ parent_user_id, student_id, relation_type }`
-- `PATCH /parents/parents/profile` (parent) — `{ name?, phone? }`
-- `GET /parents/parents/profile` (parent)
-- `GET /parents/parents/children` (parent) — query `{ limit?, offset? }`
-- `GET /parents/parents/dashboard` (parent) — daily view (timetable/homework/attendance/report cards)
+Student Dashboard
+GET `/api/students/dashboard`
+Roles: student
+Response: `{ "success": true, "data": { ... } }`
 
-## Approvals
-- `GET /teachers/approvals/pending` (teacher) — query filters
-- `POST /teachers/approvals/:type/:id/:action` (teacher) — `{ rejection_reason? }`
-- `GET /admin/approvals/pending` (school_admin)
-- `POST /admin/approvals/:type/:id/:action` (school_admin)
-- Teacher profile: `PATCH /teachers/profile/request` (teacher), `POST /admin/teachers/:teacher_id/approve` (school_admin)
-- Student profile: `PATCH /students/profile/request` (student), `POST /teachers/students/:student_id/approve` (teacher)
-- Parent approval: `POST /teachers/parents` (teacher), `POST /admin/parents/:parent_id/approve` (school_admin)
-- Bulk approvals: `POST /admin/teachers/bulk-approve`, `POST /admin/parents/bulk-approve` (school_admin) — `{ ids, action }`
+Student Profile Approval
+PATCH `/api/students/profile/request`
+Roles: student
+Request: `{ profile_pic?, dob?, gender?, father_name?, mother_name?, guardian_name?, address?, blood_group?, aadhar_no?, father_occupation?, mother_occupation?, family_income? }`
+Response: `{ "message": "Profile update submitted for teacher approval" }`
 
-## Teacher Assignments (school_admin)
-- `POST /teacher-assignments` — `{ teacher_id, class_id, section_id, subject_id, is_class_teacher? }`
-- `GET /teacher-assignments` — pagination
-- `GET /teacher-assignments/teacher/:teacherId` (teacher can omit param to get own)
-- `GET /teacher-assignments/section/:sectionId`
-- `PATCH /teacher-assignments/:id` — `{ is_active?, is_class_teacher? }`
-- `DELETE /teacher-assignments/:id`
+Teachers (admin)
+POST `/api/teachers`
+Roles: school_admin
+Request: `{}` (username/password are ignored; username is auto-generated)
+Response: `{ "teacher_id": number, "username": "string", "employee_id": "string", "password_hint": "username@123" }`
 
-## Timetables
-- `POST /timetables` (school_admin|teacher) — `{ class_id, section_id, day_of_week, entries:[{ start_time,end_time,is_break,title?,teacher_assignment_id? }] }`
-- `GET /timetables/section` (student|parent|teacher|school_admin) — query `{ class_id, section_id }`
-- `GET /timetables/teacher/me` (teacher)
+GET `/api/teachers`
+Roles: school_admin
+Query: `limit`, `offset`
+Response: `{ "total": number, "items": [ { teacher + user } ] }`
 
-## Attendance
-- `POST /teachers/attendance` (teacher) — `{ teacher_class_session_id, records:[{ student_id, status }] }`
-- `GET /teachers/attendance/summary` (teacher) — filters class/section/date
-- `GET /parents/attendance/summary` (parent)
-- `GET /students/attendance/summary` (student)
-- `GET /teachers/attendance/analytics` (teacher) — class/section/student/date filters
-- `GET /parents/attendance/analytics` (parent)
+PATCH `/api/teachers/:id/status`
+Roles: school_admin
+Request: `{ "is_active": true|false }`
+Response: `{ "message": "Status updated", "teacher": { ... } }`
 
-## Teacher Class Sessions
-- `POST /teacher-class-sessions/start` (teacher) — `{ teacher_assignment_id, timetable_id? }`
-- `POST /teacher-class-sessions/:id/end` (teacher)
+Teachers (self)
+POST `/api/teachers/complete-profile`
+Roles: teacher
+Request: `{ name, phone?, gender?, designation?, qualification?, experience?, email? }`
+Response: `{ "message": "Profile completed", "token": "jwt", "user": { ... } }`
 
-## Homework
-- `POST /homework` (school_admin|teacher) — `{ class_id, section_id, teacher_assignment_id, homework_date, description }`
-- `GET /homework` (any auth) — filters class/section/date
-- `POST /homework/:homework_id/submit` (student) — `{ is_completed, remark? }`
-- `GET /homework/analytics/summary` — optional `{ class_id, section_id, date }`
-- `GET /homework/analytics/:homework_id/students` — per-student status
+GET `/api/teachers/me`
+Roles: teacher
+Response: `{ teacher + user }`
 
-## Notifications
-- `POST /notifications` (school_admin|teacher) — `{ title, message, target_role: teacher|parent|student|all, class_id?, section_id? }`
-- `GET /notifications` (all roles) — auto-scoped to school; students/parents filtered by class/section
-- `POST /notifications/:id/acknowledge` (parent|teacher|student)
-- `GET /notifications/:id/acknowledgements` (school_admin or sender)
+Teacher Dashboard
+GET `/api/teachers/dashboard`
+Roles: teacher
+Response: `{ "success": true, "data": { ... } }`
 
-## Group Chat
-- `POST /group-chat` (teacher) — `{ subjectId, sectionId }` one per teacher+subject+section
-- `GET /group-chat` (member) — list memberships
-- `GET /group-chat/:chatId/messages` (member or school_admin)
+Teacher Profile Approval
+PATCH `/api/teachers/profile/request`
+Roles: teacher
+Request: `{ name?, phone?, qualification?, experience_years?, address? }`
+Response: `{ "message": "Profile update submitted for admin approval" }`
 
-## AI & RAG
-- `POST /rag/ask` (student|teacher|parent) — `{ question, classLevel? }` query `voice=true` for audio
-- `POST /teacher/ai` (teacher) — `{ aiType, payload }`
-- `GET /analytics/ai/school` (school_admin|super_admin)
-- `GET /analytics/ai/teacher` (teacher)
-- `GET /analytics/ai/student` (student)
+POST `/api/admin/teachers/:teacher_id/approve`
+Roles: school_admin
+Request: `{ "action": "approve|reject" }`
+Response: `{ "teacher_id": number, "status": "approve|reject" }`
 
-## Report Cards & Exams
-- `POST /report-cards` (school_admin|teacher) — `{ student_id, exam_id }`
-- `POST /report-cards/:id/marks` (school_admin|teacher) — `{ marks:[{ subject_id, marks_obtained, max_marks }] }`
-- `POST /report-cards/:id/publish` (school_admin|teacher) — `{ remarks? }`
-- `GET /report-cards/student/list` (student)
-- `GET /report-cards/:id` (student/parent/teacher/school_admin) — school + relationship checked
-- `POST /exams` (teacher|school_admin) — `{ class_id, name, start_date, end_date }`
-- `POST /exams/:id/lock` (school_admin)
-- `GET /exams` (any auth) — query `{ class_id, limit?, offset? }`
+Teacher Bulk Approval
+POST `/api/admin/teachers/bulk-approve`
+Roles: school_admin
+Request: `{ "teacher_ids": [number], "action": "approve|reject" }`
+Response: `{ "processed": number }`
 
-## Bulk Seeding (school_admin)
-- `POST /bulk/bulk-create` or `/bulk/create` — `{ classes: ..., teacher_count?, students_per_section? }`
+Parents (admin)
+POST `/api/parents/parents`
+Roles: school_admin
+Request: `{ "student_id": number, "relation_type": "mother|father|guardian" }`
+Response: `{ "parent_id": number, "username": "string", "student_id": number, "relation_type": "guardian", "password_hint": "username@123" }`
 
-## Subscriptions (super_admin)
-- `POST /subscriptions` — `{ schoolId, status, startDate?, endDate?, notes? }`
+POST `/api/parents/parents/link`
+Roles: school_admin
+Request: `{ "parent_user_id": number, "student_id": number, "relation_type": "mother|father|guardian" }`
+Response: `{ "parent_user_id": number, "student_id": number }`
 
-## Tokens (internal)
-- AI token deductions happen via services; no public routes exposed here.
+GET `/api/parents/parents`
+Roles: school_admin
+Query: `limit`, `offset`, `approval_status` (pending|approved|rejected)
+Response: `{ "total": number, "items": [ { parent + user + student } ] }`
 
-## Game (student|teacher)
-- `POST /game/quiz/single/start` — `{ quizId, timeLimitMinutes }` → `{ sessionId, playerId }`
-- `POST /game/quiz/single/submit` — `{ playerId, answers:[{ questionId, selectedIndex }] }` → `{ score, total }`
-- `GET /game/quiz/:sessionId/leaderboard`
-- `POST /game/quiz/multi/join` — `{ roomCode }` → `{ sessionId, playerId }`
+Parents (self)
+PATCH `/api/parents/parents/profile`
+Roles: parent
+Request: `{ "name"?: "string", "phone"?: "string" }`
+Response: `{ "message": "Profile updated", "token": "jwt", "user": { ... } }`
 
-## Dashboards
-- Teacher: `GET /teachers/dashboard`
-- Student: `GET /students/dashboard`
-- Parent: `GET /parents/parents/dashboard`
+GET `/api/parents/parents/profile`
+Roles: parent
+Response: `{ parent + user + student }` (includes `approval_status`)
 
-## Socket Events
-JWT passed via `socket.handshake.auth.token`.
+Parent Approvals
+POST `/api/teachers/parents`
+Roles: teacher
+Request: `{ "username": "string", "student_id": number, "relation_type": "mother|father|guardian" }`
+Response: `{ "parent_id": number, "message": "Parent created and sent for admin approval" }`
 
-### Notifications Socket
-- Connect → server joins room `school:{school_id}` and emits `notification:connected` payload `{ school_id }`.
+POST `/api/admin/parents/:parent_id/approve`
+Roles: school_admin
+Request: `{ "action": "approve|reject" }`
+Response: `{ "parent_id": number, "status": "approve|reject" }`
 
-### Group Chat Socket
-- `group:join` { chatId } → joins room if member.
-- `group:message` { chatId, type, text?, imageUrl? } → broadcast `group:message:new`.
-- `group:leave` { chatId }.
+Parent Bulk Approval
+POST `/api/admin/parents/bulk-approve`
+Roles: school_admin
+Request: `{ "parent_ids": [number], "action": "approve|reject" }`
+Response: `{ "processed": number }`
 
-### Game Socket
-- `quiz:join` { sessionId } → joins, returns `quiz:joined`.
-- `quiz:start` { sessionId } (host only) → emits `quiz:started`.
-- `quiz:answer` { sessionId, questionId, selectedIndex } → ack `quiz:answer_ack`.
-- `quiz:finished` { sessionId } → may emit `quiz:all_finished` / `quiz:waiting` / `quiz:time_up`.
-- Disconnect → marks player `DISCONNECTED`.
+Parent Dashboard
+GET `/api/parents/children`
+Roles: parent
+Query: `limit`, `offset`
+Response: `{ "success": true, "total": number, "data": [ { relation_type, student } ] }`
 
-## Responses (convention)
-- Success: `{ success: true, ... }` for most list/detail handlers; some legacy endpoints return bare resources (e.g., `/auth/login` → `{ token }`).
-- Pagination: `{ total, items }` or `{ count, rows }` depending on Sequelize call; both include arrays of records.
-- Errors: `{ message }` with HTTP status; 400 validation, 401 auth, 403 forbidden, 404 not found, 409 conflict.
+GET `/api/parents/dashboard`
+Roles: parent
+Response: `{ "success": true, "data": { ... } }`
 
-### Common Payload Shapes
-- **User (token claims)**: `{ id, role, school_id, teacher_id?, student_id?, class_id?, section_id?, first_login }`
-- **Class**: `{ id, class_name, class_teacher_id?, is_active, sections?: [{ id, name, is_active }] }`
-- **Section**: `{ id, class_id, name, class_teacher_id?, is_active }`
-- **TeacherAssignment**: `{ id, teacher_id, class_id, section_id, subject_id, is_class_teacher, is_active }`
-- **Timetable (section view)**: `{ [day_of_week]: [{ id, start_time, end_time, is_break, title?, subject? }] }`
-- **Homework list**: `{ success, total, items:[{ id, class_id, section_id, subject_id, homework_date, description, created_by }] }`
-- **Homework student status**: `{ success, data:[{ student_id, name, roll_no, is_completed, remark }] }`
-- **Attendance summary item**: includes `TeacherClassSession` and `Student` with `User { id, name }`
-- **Notification**: `{ id, title, message, target_role, class_id, section_id, created_at }`
-- **ReportCard**: `{ id, student_id, class_id, exam_id, remarks?, published_at?, ReportCardMarks:[{ subject_id, marks_obtained, max_marks }] }`
-- **Exam**: `{ id, class_id, name, start_date, end_date, is_locked }`
-- **AI analytics**:
-  - School: `{ total_chats, active_teachers, active_students, top_subjects:[{ subject, count }] }`
-  - Teacher: `{ total_chats, avg_tokens, by_day:[{ date, count }] }`
-  - Student: `{ total_chats, avg_tokens, by_day:[{ date, count }] }`
-- **Dashboards**
-  - Teacher: `{ classes:[{ id, class_name, sections:[...] }], timetable, homework_summary, pending_report_cards }`
-  - Student: `{ student:{ id, name, admission_no, class_id, section_id }, metrics:{ attendance:{ present, total, percentage }, ai_tokens:{ total, used, remaining }, homework_pending, unread_notifications } }`
-  - Parent daily: array of `{ student:{ id, name, roll_no, class_id, section_id }, timetable, homework:[{ homework_id, subject_id, description, is_completed }], attendance_last_7_days, report_cards }`
+Approvals (general)
+GET `/api/teachers/approvals/pending`
+Roles: teacher
+Query: `limit`, `offset`, `class_id`, `from_date`, `to_date`
+Response: `{ "total": number, "items": [students] }`
+Notes: Results are scoped to the teacher's assigned sections.
 
-### Example Responses
-- `GET /homework`
-```json
-{ "success": true, "total": 2, "items": [
-  { "id": 12, "class_id": 3, "section_id": 5, "subject_id": 9, "homework_date": "2026-02-06", "description": "Read chapter 4" }
-] }
-```
-- `GET /notifications`
-```json
-{ "success": true, "total": 3, "items": [
-  { "id": 7, "title": "PTM", "message": "PTM on Friday", "target_role": "parent", "class_id": 3, "section_id": null, "created_at": "2026-02-05T10:00:00Z" }
-] }
-```
-- `GET /timetables/section`
-```json
-{ "success": true, "data": {
-  "monday": [
-    { "id": 1, "start_time": "09:00", "end_time": "09:45", "is_break": false, "subject": { "id": 4, "name": "Math" } },
-    { "id": 2, "start_time": "09:45", "end_time": "10:00", "is_break": true, "title": "Short Break" }
-  ]
-} }
-```
+POST `/api/teachers/approvals/:type/:id/:action`
+Roles: teacher
+Params: `type` = student|teacher|parent, `action` = approve|reject
+Request: `{ "rejection_reason"?: "string" }`
+Response: `{ "message": "Request processed successfully", "result": { ... } }`
+Notes: For `type=student`, action is allowed only if the teacher is assigned to the student's section.
+
+GET `/api/admin/approvals/pending`
+Roles: school_admin
+Query: `limit`, `offset`, `from_date`, `to_date`
+Response: `{ "teachers": { total, items }, "parents": { total, items } }`
+
+POST `/api/admin/approvals/:type/:id/:action`
+Roles: school_admin
+Params: `type` = student|teacher|parent, `action` = approve|reject
+Request: `{ "rejection_reason"?: "string" }`
+Response: `{ "message": "Request processed successfully", "result": { ... } }`
+
+Bulk Seeder
+POST `/api/bulk/bulk-create`
+Roles: school_admin
+Request: `{ "classes": [ { name, sections: [ { name, students } ] } ] | { [name]: { sections } }, "teacher_count"?: number, "students_per_section"?: number }`
+Response: `{ "message": "Data created successfully", "summary": { classes_created, teachers_created, students_created, ... } }`
+
+POST `/api/bulk/create`
+Roles: school_admin
+Request: same as above
+Response: same as above
+
+Attendance Summary
+POST `/api/teachers/attendance`
+Roles: teacher
+Request: `{ "teacher_class_session_id": number, "records": [ { "student_id": number, "status": "present|absent|leave" } ] }`
+Response: `{ "success": true, "message": "Attendance marked successfully" }`
+
+GET `/api/teachers/attendance/summary`
+Roles: teacher
+Query: `class_id`, `section_id`, `from_date`, `to_date`, `limit`, `offset`
+Response: `{ "total": number, "items": [ ... ] }`
+
+GET `/api/parents/attendance/summary`
+Roles: parent
+Query: `from_date`, `to_date`, `limit`, `offset`
+Response: `{ "total": number, "items": [ ... ] }`
+
+GET `/api/students/attendance/summary`
+Roles: student
+Query: `from_date`, `to_date`, `limit`, `offset`
+Response: `{ "total": number, "items": [ ... ] }`
+
+Attendance Analytics
+GET `/api/teachers/attendance/analytics`
+Roles: teacher
+Query: `from_date`, `to_date`, `class_id?`, `section_id?`, `student_id?`
+Response: `{ "items": [ ... ] }`
+
+GET `/api/parents/attendance/analytics`
+Roles: parent
+Query: `from_date`, `to_date`
+Response: `{ "items": [ ... ] }`
+
+Timetables
+POST `/api/timetables`
+Roles: school_admin, teacher
+Request: `{ "class_id": number, "section_id": number, "day_of_week": "monday|tuesday|wednesday|thursday|friday|saturday", "entries": [ { "start_time": "HH:mm", "end_time": "HH:mm", "teacher_assignment_id"?: number, "title"?: "string", "is_break": boolean } ] }`
+Response: `{ "success": true, "message": "Timetable saved successfully" }`
+
+GET `/api/timetables/section`
+Roles: any authenticated user
+Query: `class_id`, `section_id`
+Response: `{ "success": true, "data": { "monday": [ ... ], "tuesday": [ ... ] } }`
+
+GET `/api/timetables/teacher/me`
+Roles: teacher
+Response: `{ "success": true, "data": { "monday": [ ... ], "tuesday": [ ... ] } }`
+
+Teacher Assignments
+POST `/api/teacher-assignments`
+Roles: school_admin
+Request: `{ "teacher_id": number, "class_id": number, "section_id": number, "subject_id": number, "is_class_teacher"?: boolean }`
+Response: `{ "success": true, "data": { ... } }`
+
+GET `/api/teacher-assignments`
+Roles: school_admin
+Query: `limit`, `offset`
+Response: `{ "success": true, "total": number, "items": [ ... ] }`
+
+GET `/api/teacher-assignments/teacher/:teacherId`
+Roles: school_admin, teacher
+Response: `{ "success": true, "data": [ ... ] }`
+
+GET `/api/teacher-assignments/section/:sectionId`
+Roles: school_admin, teacher (class teacher for that section)
+Response: `{ "success": true, "data": [ ... ] }`
+
+PATCH `/api/teacher-assignments/:id`
+Roles: school_admin
+Request: `{ "is_active"?: boolean, "is_class_teacher"?: boolean }`
+Response: `{ "success": true, "data": { ... } }`
+
+DELETE `/api/teacher-assignments/:id`
+Roles: school_admin
+Response: `{ "success": true, "message": "..." }`
+
+Teacher Class Sessions
+POST `/api/teacher-class-sessions/start`
+Roles: teacher
+Request: `{ "teacher_assignment_id": number, "timetable_id"?: number }`
+Response: `{ "success": true, "data": { ... } }`
+
+POST `/api/teacher-class-sessions/:id/end`
+Roles: teacher
+Response: `{ "success": true, "data": { ... } }`
+
+Homework
+POST `/api/homework`
+Roles: school_admin, teacher
+Request: `{ "class_id": number, "section_id": number, "teacher_assignment_id": number, "homework_date": "YYYY-MM-DD", "description": "string" }`
+Response: `{ "success": true, "data": { ... } }`
+
+GET `/api/homework`
+Roles: any authenticated user
+Query: `class_id?`, `section_id?`, `date?`
+Response: `{ "success": true, "total": number, "items": [ ... ] }`
+
+POST `/api/homework/:homework_id/submit`
+Roles: student
+Request: `{ "is_completed": true|false, "remark"?: "string" }`
+Response: `{ "success": true, "data": { ... } }`
+
+GET `/api/homework/analytics/summary`
+Roles: school_admin, teacher
+Query: `class_id?`, `section_id?`, `date?`
+Response: `{ "success": true, "data": { ... } }`
+
+GET `/api/homework/analytics/:homework_id/students`
+Roles: school_admin, teacher
+Response: `{ "success": true, "data": { ... } }`
+
+Notifications
+POST `/api/notifications`
+Roles: school_admin, teacher
+Request: `{ "title": "string", "message": "string", "target_role": "teacher|parent|student|all", "class_id"?: number, "section_id"?: number }`
+Response: `{ "success": true, "data": { ... } }`
+
+GET `/api/notifications`
+Roles: any authenticated user
+Response: `{ "success": true, "total": number, "items": [ ... ] }`
+
+POST `/api/notifications/:id/acknowledge`
+Roles: parent, teacher, student
+Request: `{}` (no body)
+Response: `{ "success": true, "message": "Acknowledged" }`
+
+GET `/api/notifications/:id/acknowledgements`
+Roles: school_admin, sender teacher
+Response: `{ "success": true, "data": { count, rows } }`
+
+Group Chat
+POST `/api/group-chat`
+Roles: teacher
+Request: `{ "subjectId": number, "sectionId": number }`
+Response: `{ "chatId": number }`
+
+GET `/api/group-chat`
+Roles: teacher, student
+Response: `[ { chatId, role, subject, class, section, created_at } ]`
+
+GET `/api/group-chat/:chatId/messages`
+Roles: teacher, student, school_admin
+Response: `[ { id, sender_id, sender_name, avatar, content, type, created_at } ]`
+
+Quiz
+POST `/api/quiz`
+Roles: teacher, school_admin
+Request: `{ "title"?: "string", "topic"?: "string", "topicId"?: number, "difficulty"?: "string", "questions": [ { "question_text"?: "string", "question"?: "string", "options": [string], "correct_option_index"?: number, "correctIndex"?: number } ] }`
+Response: `{ "quizId": number }`
+
+POST `/api/quiz/generate`
+Roles: student, teacher
+Request: `{ "topic": "string", "classLevel"?: "string|number", "difficulty"?: "string", "numQuestions"?: number }`
+Response: `{ "quizId": number, "questions": [ ... ] }`
+
+Game (Quiz Sessions)
+POST `/api/game/quiz/single/start`
+Roles: student, teacher
+Request: `{ "quizId": number, "timeLimitMinutes": number }`
+Response: `{ "sessionId": number, "playerId": number }`
+
+POST `/api/game/quiz/single/submit`
+Roles: student, teacher
+Request: `{ "playerId": number, "answers": [ { "questionId": number, "selectedIndex": number } ] }`
+Response: `{ "score": number, "total": number }`
+
+POST `/api/game/quiz/multi/create`
+Roles: student, teacher
+Request: `{ "topic": "string", "classLevel"?: "string|number", "difficulty"?: "string", "numQuestions"?: number, "roomCode"?: "string", "maxPlayers"?: number, "timeLimitMinutes"?: number }`
+Response: `{ "sessionId": number, "roomCode": "string", "quizId": number }`
+
+POST `/api/game/quiz/multi/join`
+Roles: student, teacher
+Request: `{ "roomCode": "string" }`
+Response: `{ "sessionId": number, "playerId"?: number, "isTeacher"?: true, "isHost"?: boolean }`
+
+GET `/api/game/quiz/:sessionId/leaderboard`
+Roles: student, teacher
+Response: `[ { score, finished_at, user: { id, name } } ]`
+
+RAG
+POST `/api/rag/ask`
+Roles: student, teacher, parent
+Query: `voice=true` (optional, returns audio/wav stream)
+Request: `{ "question": "string", "classLevel"?: "string|number" }`
+Response (text): `{ "question": "string", "answer": "string", "sources": [ ... ] }`
+Response (voice): `audio/wav` stream
+
+Teacher AI
+POST `/api/teacher/ai`
+Roles: teacher
+Request: `{ "aiType": "string", "payload": { ... } }`
+Response: `{ "aiType": "string", "result": { ... } }`
+
+AI Analytics
+GET `/api/analytics/ai/school`
+Roles: school_admin, super_admin
+Response: `[ { total_calls, total_tokens, role } ]`
+
+GET `/api/analytics/ai/teacher`
+Roles: teacher
+Response: `[ { ai_type, calls, tokens } ]`
+
+GET `/api/analytics/ai/student`
+Roles: student
+Response: `[ { date, tokens } ]`
+
+Audit Logs
+GET `/api/admin/audit-logs`
+Roles: school_admin
+Query: `entity_type`, `entity_id`, `from_date`, `to_date`, `limit`, `offset`
+Response: `{ "total": number, "items": [ ... ] }`
+
+Exams & Report Cards
+POST `/api/exams`
+Roles: school_admin, teacher
+Request: `{ "class_id": number, "name": "string", "start_date"?: "YYYY-MM-DD", "end_date"?: "YYYY-MM-DD" }`
+Response: `{ "success": true, "data": { ... } }`
+
+POST `/api/exams/:id/lock`
+Roles: school_admin
+Request: `{ "is_locked": true }`
+Response: `{ "success": true, "data": { ... } }`
+
+GET `/api/exams`
+Roles: student, parent, teacher
+Query: `class_id` (required)
+Response: `{ "success": true, "total": number, "items": [ ... ] }`
+
+POST `/api/report-cards`
+Roles: school_admin, teacher
+Request: `{ "student_id": number, "exam_id": number }`
+Response: `{ "success": true, "data": { ... } }`
+
+POST `/api/report-cards/:id/marks`
+Roles: school_admin, teacher
+Request: `{ "marks": [ { "subject_id": number, "marks_obtained": number, "max_marks": number } ] }`
+Response: `{ "success": true, "message": "Marks saved" }`
+
+POST `/api/report-cards/:id/publish`
+Roles: school_admin, teacher
+Request: `{ "remarks"?: "string" }`
+Response: `{ "success": true, "data": { ... } }`
+
+GET `/api/report-cards/student/list`
+Roles: student
+Response: `{ "success": true, "data": [ ... ] }`
+
+GET `/api/report-cards/:id`
+Roles: teacher, student, parent, school_admin (scoped)
+Response: `{ "success": true, "data": { ... } }`
+
+Approvals Dashboard (Admin/Teacher)
+GET `/api/teachers/approvals/pending` and `GET /api/admin/approvals/pending`
+See Approvals section above.
+
+Sockets (Socket.IO)
+Auth: connect with `io(url, { auth: { token: "<jwt>" } })`
+
+Quiz / Game Socket (`game.socket.js`)
+Client emit: `quiz:join` `{ sessionId }`
+Server emit: `quiz:joined` `{ sessionId, playerId|null, status, isHost }`
+Server emit: `quiz:question` `{ question, questionIndex, totalQuestions, timeLimit }`
+Client emit: `quiz:start` `{ sessionId }` (host only)
+Server emit: `quiz:started` `{ startedAt, totalTimeMs }`
+Client emit: `quiz:answer` `{ sessionId, questionId, selectedIndex }`
+Server emit: `quiz:answer_ack` `{ questionId, isCorrect }`
+Client emit: `quiz:finished` `{ sessionId }`
+Server emit: `quiz:waiting`, `quiz:finished`, `quiz:all_finished`, `quiz:time_up`
+Server emit: `quiz:error` `{ message }`
+
+Group Chat Socket (`group-chat.socket.js`)
+Client emit: `group:join` `{ chatId }`
+Server emit: `group:joined` `{ chatId }`
+Client emit: `group:message` `{ chatId, type: "text|image", text?, imageUrl? }`
+Server emit: `group:message:new` `{ id, chatId, senderUserId, type, text, imageUrl, createdAt }`
+Client emit: `group:leave` `{ chatId }`
+Server emit: `group:error` `{ message }`
+
+Notifications Socket (`notification.socket.js`)
+On connect: server joins `school:<school_id>` room
+Server emit: `notification:connected` `{ school_id }`

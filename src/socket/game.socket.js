@@ -7,6 +7,16 @@ import PlayerAnswer from "../modules/game/player-answer.model.js";
 import QuizQuestion from "../modules/quiz/quiz-question.model.js";
 import db from "../config/db.js";
 
+const sessionState = new Map();
+
+function sanitizeQuestion(question) {
+  return {
+    id: question.id,
+    question_text: question.question_text,
+    options: question.options,
+  };
+}
+
 
 export function initGameSocket(io) {
 
@@ -30,6 +40,62 @@ export function initGameSocket(io) {
     }
   });
 
+  const endSession = async (sessionId) => {
+    const state = sessionState.get(sessionId);
+    if (state?.timerId) {
+      clearTimeout(state.timerId);
+    }
+    sessionState.delete(sessionId);
+
+    const session = await GameSession.findByPk(sessionId);
+    if (session && session.status !== "FINISHED") {
+      await session.update({ status: "FINISHED", ended_at: new Date() });
+    }
+
+    io.to(`quiz:${sessionId}`).emit("quiz:finished");
+    io.to(`quiz:${sessionId}`).emit("quiz:all_finished");
+  };
+
+  const emitQuestion = (sessionId) => {
+    const state = sessionState.get(sessionId);
+    if (!state) return;
+
+    const { questions, currentIndex, perQuestionMs } = state;
+    if (currentIndex >= questions.length) {
+      endSession(sessionId);
+      return;
+    }
+
+    state.questionSentAt = Date.now();
+    sessionState.set(sessionId, state);
+
+    io.to(`quiz:${sessionId}`).emit("quiz:question", {
+      question: sanitizeQuestion(questions[currentIndex]),
+      questionIndex: currentIndex,
+      totalQuestions: questions.length,
+      timeLimit: perQuestionMs,
+    });
+
+    state.timerId = setTimeout(() => {
+      const nextState = sessionState.get(sessionId);
+      if (!nextState) return;
+      nextState.currentIndex += 1;
+      sessionState.set(sessionId, nextState);
+      emitQuestion(sessionId);
+    }, perQuestionMs);
+  };
+
+  const startQuestionFlow = (sessionId, questions, perQuestionMs) => {
+    sessionState.set(sessionId, {
+      questions,
+      perQuestionMs,
+      currentIndex: 0,
+      questionSentAt: Date.now(),
+      timerId: null,
+    });
+    emitQuestion(sessionId);
+  };
+
   io.on("connection", (socket) => {
 
     /**
@@ -48,6 +114,19 @@ export function initGameSocket(io) {
           status: session.status,
           isHost: true
         });
+        const state = sessionState.get(sessionId);
+        if (session.status === "IN_PROGRESS" && state?.questions?.length) {
+          const timeLeft = Math.max(
+            0,
+            state.perQuestionMs - (Date.now() - state.questionSentAt)
+          );
+          socket.emit("quiz:question", {
+            question: sanitizeQuestion(state.questions[state.currentIndex]),
+            questionIndex: state.currentIndex,
+            totalQuestions: state.questions.length,
+            timeLimit: timeLeft,
+          });
+        }
         return;
       }
 
@@ -91,6 +170,20 @@ export function initGameSocket(io) {
         status: player.status,
         isHost: false // Student is not host (usually)
       });
+
+      const state = sessionState.get(sessionId);
+      if (session?.status === "IN_PROGRESS" && state?.questions?.length) {
+        const timeLeft = Math.max(
+          0,
+          state.perQuestionMs - (Date.now() - state.questionSentAt)
+        );
+        socket.emit("quiz:question", {
+          question: sanitizeQuestion(state.questions[state.currentIndex]),
+          questionIndex: state.currentIndex,
+          totalQuestions: state.questions.length,
+          timeLimit: timeLeft,
+        });
+      }
     });
 
     /**
@@ -123,6 +216,25 @@ export function initGameSocket(io) {
         startedAt: session.started_at,
         totalTimeMs: session.total_time_ms,
       });
+
+      const questions = await QuizQuestion.findAll({
+        where: { quiz_id: session.quiz_id },
+        order: [["order_index", "ASC"]],
+      });
+
+      if (!questions.length) {
+        io.to(`quiz:${sessionId}`).emit("quiz:error", {
+          message: "No questions available for this quiz",
+        });
+        return;
+      }
+
+      const perQuestionMs = Math.max(
+        5000,
+        Math.floor((session.total_time_ms || 0) / questions.length) || 30000
+      );
+
+      startQuestionFlow(sessionId, questions, perQuestionMs);
     });
 
     /**
@@ -147,7 +259,7 @@ export function initGameSocket(io) {
           await session.update({ status: "FINISHED" });
           io.to(`quiz:${sessionId}`).emit("quiz:time_up");
         }
-
+        await endSession(sessionId);
         socket.emit("quiz:error", { message: "Time is over" });
         return;
       }
@@ -164,9 +276,11 @@ export function initGameSocket(io) {
         },
       });
 
-      io.to(`quiz:${sessionId}`).emit(
-        remaining === 0 ? "quiz:all_finished" : "quiz:waiting"
-      );
+      if (remaining === 0) {
+        await endSession(sessionId);
+      } else {
+        io.to(`quiz:${sessionId}`).emit("quiz:waiting");
+      }
     });
 
     /**
@@ -195,6 +309,7 @@ export function initGameSocket(io) {
           await session.update({ status: "FINISHED" });
           io.to(`quiz:${sessionId}`).emit("quiz:time_up");
         }
+        await endSession(sessionId);
         socket.emit("quiz:error", { message: "Time is over" });
         return;
       }

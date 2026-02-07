@@ -20,13 +20,9 @@ const Quiz = db.define(
       },
     },
 
-    topic_id: {
-      type: DataTypes.BIGINT,
+    topic: {
+      type: DataTypes.STRING,
       allowNull: false,
-      references: {
-        model: "topics",
-        key: "id",
-      },
     },
 
     title: {
@@ -49,7 +45,7 @@ const Quiz = db.define(
     underscored: true,
     indexes: [
       { fields: ["owner_user_id"] },
-      { fields: ["topic_id"] },
+      { fields: ["topic"] },
     ],
   }
 );

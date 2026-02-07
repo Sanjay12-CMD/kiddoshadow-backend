@@ -3,6 +3,7 @@ import {
   createParentAndLinkService,
   linkExistingParentService,
   updateParentProfileService,
+  listParentsService,
 } from "./parent.service.js";
 
 /* =========================
@@ -27,6 +28,22 @@ export const linkExistingParent = async (req, res, next) => {
       ...req.body,
     });
     res.status(201).json(result);
+  } catch (e) {
+    next(e);
+  }
+};
+
+export const listParents = async (req, res, next) => {
+  try {
+    const result = await listParentsService({
+      school_id: req.user.school_id,
+      query: req.query,
+    });
+
+    res.json({
+      total: result.count,
+      items: result.rows,
+    });
   } catch (e) {
     next(e);
   }
@@ -72,18 +89,18 @@ export const updateParentProfile = async (req, res, next) => {
 
 export const getMyProfile = async (req, res, next) => {
   try {
-    // Parent user is stored directly in users table, but we might have a separate Parent model?
-    // Looking at service, linkExistingParentService uses Parent model. 
-    // Wait, createParentAndLinkService -> User.create.
-    // Let's check parent.service.js to see if there is a Parent model.
-    // If not, we just return req.user?
-    // But other controllers import Parent model.
-    // Assuming simple return for now or fetching Parent model if needed.
-    // For profile page, we mostly need name/phone which are on User.
-    // But updateParentProfile updates User.
+    const Parent = (await import("./parent.model.js")).default;
 
-    // Let's just return req.user for now as "profile"
-    res.json(req.user);
+    const parent = await Parent.findOne({
+      where: { user_id: req.user.id },
+      include: ["user", "student"],
+    });
+
+    if (!parent) {
+      return res.json(req.user);
+    }
+
+    res.json(parent);
   } catch (e) {
     next(e);
   }

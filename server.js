@@ -40,6 +40,8 @@ const io = new Server(httpServer, {
     origin: [
       "http://localhost:5173",
       "http://localhost:5174",
+      "https://adminpanel.xtown.in",
+      "https://school.xtown.in",
     ],
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
     allowedHeaders: ["Content-Type", "Authorization"],
@@ -56,6 +58,8 @@ app.use(cors({
   origin: [
     "http://localhost:5173",
     "http://localhost:5174",
+    "https://adminpanel.xtown.in",
+    "https://school.xtown.in",
   ],
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
   allowedHeaders: ["Content-Type", "Authorization"],
@@ -114,6 +118,7 @@ import homeworkRoutes from "./src/modules/homework/homework.routes.js";
 import notificationRoutes from "./src/modules/notifications/notification.routes.js";
 import groupChatRoutes from "./src/modules/group-chat/group-chat.routes.js";
 import gameRoutes from "./src/modules/game/game.routes.js";
+import quizRoutes from "./src/modules/quiz/quiz.routes.js";
 
 
 
@@ -128,6 +133,7 @@ app.use("/api", attendanceAnalyticsRoutes);
 app.use("/api/schools", schoolRoutes);
 app.use("/api/students", studentDashboardRoutes);
 app.use("/api/students", studentRoutes);
+app.use("/api/teachers", teacherDashboardRoutes);
 app.use("/api/teachers", teacherRoutes);
 app.use("/api/parents", parentRoutes);
 app.use("/api/sections", sectionRoutes);
@@ -136,7 +142,6 @@ app.use("/api/classes", classRoutes);
 app.use("/api/timetables", timetableRoutes);
 app.use("/api/report-cards", reportCardRoutes);
 app.use("/api/exams", examRoutes);
-app.use("/api", teacherDashboardRoutes);
 
 // approvals
 app.use("/api", approvalRoutes);
@@ -162,6 +167,9 @@ app.use("/api/rag", ragRoutes);
 app.use("/api", teacherAiRoutes);
 app.use("/api", aiAnalyticsRoutes);
 
+// quiz
+app.use("/api/quiz", quizRoutes);
+
 // teacher planning & tracking
 app.use("/api/teacher-assignments", teacherAssignmentRoutes);
 app.use("/api/teacher-class-sessions", teacherClassSessionRoutes);
@@ -184,7 +192,7 @@ try {
   await db.authenticate();
   console.log("DB connected");
 
-  await db.sync({ force: true });
+  await db.sync({ force: false });
 
   httpServer.listen(PORT, "0.0.0.0", () => {
     console.log(`Server + Socket running on port ${PORT}`);

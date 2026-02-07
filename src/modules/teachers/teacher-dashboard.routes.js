@@ -9,7 +9,7 @@ import { getTeacherDashboard } from "./teacher-dashboard.controller.js";
 const router = express.Router();
 
 router.get(
-  "/teachers/dashboard",
+  "/dashboard",
   protect,
   allowRoles("teacher"),
   validate(teacherDashboardSchema),

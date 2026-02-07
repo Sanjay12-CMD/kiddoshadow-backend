@@ -3,13 +3,9 @@ export function buildQuizPrompt({
   classLevel,
   difficulty,
   numQuestions,
-  context,
 }) {
   return `
-You are a CBSE school exam question setter.
-
-You MUST use ONLY the textbook content below.
-DO NOT use outside knowledge.
+You are a school exam question setter.
 
 Create a quiz for:
 Class: ${classLevel}
@@ -25,17 +21,14 @@ Rules:
 - Return ONLY valid JSON
 - No explanation, no markdown, no text outside JSON
 
-Textbook content:
-${context}
-
 JSON format:
 {
   "title": "...",
   "questions": [
     {
-      "question": "...",
+      "question_text": "...",
       "options": ["...", "...", "...", "..."],
-      "correct_index": 0
+      "correct_option_index": 0
     }
   ]
 }

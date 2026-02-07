@@ -36,30 +36,41 @@ router.post(
 router.get("/me", protect, getMyProfile);
 
 /* admin */
-router.use(protect, allowRoles("school_admin"));
-
 router.post(
   "/",
+  protect,
+  allowRoles("school_admin"),
   validate(createStudentSchema),
   createStudent
 );
 
-router.get("/", listStudents);
+router.get(
+  "/",
+  protect,
+  allowRoles("school_admin"),
+  listStudents
+);
 
 router.patch(
   "/:id/move",
+  protect,
+  allowRoles("school_admin"),
   validate(moveStudentSchema),
   moveStudent
 );
 
 router.patch(
   "/:id/status",
+  protect,
+  allowRoles("school_admin"),
   validate(updateStudentStatusSchema),
   updateStudentStatus
 );
 
 router.post(
   "/assign-section",
+  protect,
+  allowRoles("school_admin"),
   validate(assignStudentsToSectionSchema),
   assignStudentsToSection
 );

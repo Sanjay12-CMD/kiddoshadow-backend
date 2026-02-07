@@ -4,6 +4,7 @@ import { allowRoles } from "../../shared/middlewares/role.js";
 import {
   submitSinglePlayerQuiz,
   startSinglePlayerQuiz,
+  createMultiplayerQuiz,
   getLeaderboard,
   joinMultiplayerQuiz,
 } from "./game.controller.js";
@@ -16,6 +17,12 @@ router.post(
   "/quiz/single/start",
   allowRoles("student", "teacher"),
   startSinglePlayerQuiz
+);
+
+router.post(
+  "/quiz/multi/create",
+  allowRoles("student", "teacher"),
+  createMultiplayerQuiz
 );
 
 router.post(

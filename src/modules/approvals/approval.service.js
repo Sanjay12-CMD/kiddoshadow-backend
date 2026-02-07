@@ -6,23 +6,62 @@ import Student from "../students/student.model.js";
 import Teacher from "../teachers/teacher.model.js";
 import Parent from "../parents/parent.model.js";
 import User from "../users/user.model.js";
+import TeacherAssignment from "../teacher-assignments/teacher-assignment.model.js";
+
+const resolveSchoolId = (school_id, user) => {
+  const resolved = school_id ?? user?.school_id;
+  if (!resolved) {
+    throw new AppError("school_id is required", 400);
+  }
+  return resolved;
+};
 
 /* =========================
    TEACHER: STUDENT PENDING
 ========================= */
 export const getPendingStudentApprovalsService = async ({
   school_id,
+  user,
   class_id,
   query,
 }) => {
+  const scopedSchoolId = resolveSchoolId(school_id, user);
   const { limit, offset } = getPagination(query);
   const safeQuery = query || {};
   const { from_date, to_date } = safeQuery;
 
   const where = {
-    school_id,
+    school_id: scopedSchoolId,
     approval_status: "pending",
   };
+
+  if (user?.role === "teacher") {
+    const assignments = await TeacherAssignment.findAll({
+      where: {
+        school_id: scopedSchoolId,
+        teacher_id: user.teacher_id,
+        is_active: true,
+      },
+      attributes: ["class_id", "section_id"],
+    });
+
+    if (!assignments.length) {
+      return { count: 0, rows: [] };
+    }
+
+    const allowedClassIds = [
+      ...new Set(assignments.map((a) => a.class_id)),
+    ];
+    const allowedSectionIds = [
+      ...new Set(assignments.map((a) => a.section_id)),
+    ];
+
+    if (class_id && !allowedClassIds.includes(Number(class_id))) {
+      return { count: 0, rows: [] };
+    }
+
+    where.section_id = { [Op.in]: allowedSectionIds };
+  }
 
   if (class_id) {
     where.class_id = Number(class_id);
@@ -47,14 +86,16 @@ export const getPendingStudentApprovalsService = async ({
 ========================= */
 export const getPendingTeacherApprovalsService = async ({
   school_id,
+  user,
   query,
 }) => {
+  const scopedSchoolId = resolveSchoolId(school_id, user);
   const { limit, offset } = getPagination(query);
   const safeQuery = query || {};
   const { from_date, to_date } = safeQuery;
 
   const where = {
-    school_id,
+    school_id: scopedSchoolId,
     approval_status: "pending",
   };
 
@@ -77,14 +118,15 @@ export const getPendingTeacherApprovalsService = async ({
 ========================= */
 export const getPendingParentApprovalsService = async ({
   school_id,
+  user,
   query,
 }) => {
+  const scopedSchoolId = resolveSchoolId(school_id, user);
   const { limit, offset } = getPagination(query);
   const safeQuery = query || {};
   const { from_date, to_date } = safeQuery;
 
   const where = {
-    school_id,
     approval_status: "pending",
   };
 
@@ -99,12 +141,14 @@ export const getPendingParentApprovalsService = async ({
     include: [
       {
         model: User,
-        where: { school_id }, // ✅ FIXED: school scoped
+        required: true,
+        where: { school_id: scopedSchoolId }, // FIXED: school scoped
         attributes: [],
       },
     ],
     limit,
     offset,
+    distinct: true,
     order: [["created_at", "DESC"]],
   });
 };
@@ -133,18 +177,38 @@ export const processApprovalAction = async ({
   else throw new AppError("Invalid approval type", 400);
 
   // 3. Find Entity
-  const entity = await Model.findByPk(id);
+  const include =
+    type === "parent" ? [{ model: User, attributes: ["school_id"] }] : undefined;
+  const entity = await Model.findByPk(id, include ? { include } : undefined);
   if (!entity) throw new AppError("Entity not found", 404);
+
+  const entitySchoolId =
+    type === "parent" ? (entity.user ?? entity.User)?.school_id : entity.school_id;
 
   // 4. Permission Check (CRITICAL)
   if (user.role === "teacher") {
-    if (entity.school_id !== user.school_id) {
+    if (entitySchoolId !== user.school_id) {
       throw new AppError("Unauthorized", 403);
+    }
+
+    if (type === "student") {
+      const hasAssignment = await TeacherAssignment.findOne({
+        where: {
+          school_id: user.school_id,
+          teacher_id: user.teacher_id,
+          section_id: entity.section_id,
+          is_active: true,
+        },
+      });
+
+      if (!hasAssignment) {
+        throw new AppError("Forbidden role", 403);
+      }
     }
   }
 
   if (user.role === "school_admin") {
-    if (entity.school_id !== user.school_id) {
+    if (entitySchoolId !== user.school_id) {
       throw new AppError("Unauthorized", 403);
     }
   }

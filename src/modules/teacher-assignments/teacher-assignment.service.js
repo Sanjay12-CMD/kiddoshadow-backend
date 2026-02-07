@@ -6,6 +6,7 @@ import Teacher from "../teachers/teacher.model.js";
 import Class from "../classes/classes.model.js";
 import Section from "../sections/section.model.js";
 import Subject from "../subjects/subject.model.js";
+import User from "../users/user.model.js";
 
 
 /* CREATE */
@@ -109,6 +110,16 @@ export async function getTeacherAssignments({ schoolId, teacherId }) {
       teacher_id: teacherId,
       is_active: true,
     },
+    include: [
+      { model: Class, attributes: ["id", "class_name"] },
+      { model: Section, attributes: ["id", "name"] },
+      { model: Subject, attributes: ["id", "name"] },
+      {
+        model: Teacher,
+        attributes: ["id", "user_id"],
+        include: [{ model: User, attributes: ["id", "name", "username"] }],
+      },
+    ],
     order: [["created_at", "DESC"]],
   });
 }
@@ -121,6 +132,16 @@ export async function getSectionAssignments({ schoolId, sectionId }) {
       section_id: sectionId,
       is_active: true,
     },
+    include: [
+      { model: Class, attributes: ["id", "class_name"] },
+      { model: Section, attributes: ["id", "name"] },
+      { model: Subject, attributes: ["id", "name"] },
+      {
+        model: Teacher,
+        attributes: ["id", "user_id"],
+        include: [{ model: User, attributes: ["id", "name", "username"] }],
+      },
+    ],
     order: [["created_at", "DESC"]],
   });
 }

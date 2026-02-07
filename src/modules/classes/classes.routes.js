@@ -9,6 +9,7 @@ import {
 import {
   createClass,
   getClasses,
+  getLoginRoster,
   getClassById,
   updateClass,
   deleteClass,
@@ -25,6 +26,7 @@ router.post(
   createClass
 );
 router.get("/", allowRoles("school_admin", "teacher"), getClasses);
+router.get("/login-roster", allowRoles("school_admin"), getLoginRoster);
 router.get("/:id", allowRoles("school_admin", "teacher"), getClassById);
 router.patch(
   "/:id",

@@ -6,6 +6,7 @@ import {
   getClassByIdService,
   updateClassService,
   deleteClassService,
+  getLoginRosterService,
 } from "./classes.service.js";
 
 export const createClass = asyncHandler(async (req, res) => {
@@ -75,5 +76,17 @@ export const deleteClass = asyncHandler(async (req, res) => {
   res.json({
     success: true,
     message: "Class deleted successfully",
+  });
+});
+
+export const getLoginRoster = asyncHandler(async (req, res) => {
+  const data = await getLoginRosterService({
+    school_id: req.user.school_id,
+    query: req.query,
+  });
+
+  res.json({
+    success: true,
+    data,
   });
 });
