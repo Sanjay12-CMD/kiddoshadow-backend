@@ -61,7 +61,7 @@ export const getAdminPendingApprovals = async (req, res, next) => {
 export const approveRejectRequest = async (req, res, next) => {
   try {
     const { type, id, action } = req.params;
-    const { rejection_reason } = req.body;
+    const rejection_reason = req.body?.rejection_reason;
 
     const result = await import("./approval.service.js").then(m => m.processApprovalAction({
       user: req.user,

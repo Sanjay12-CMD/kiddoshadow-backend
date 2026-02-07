@@ -4,8 +4,9 @@ import Quiz from "./quiz.model.js";
 import QuizQuestion from "./quiz-question.model.js";
 import AppError from "../../shared/appError.js";
 
+const GEMINI_MODEL = process.env.GEMINI_MODEL ;
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const chatModel = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+const chatModel = genAI.getGenerativeModel({ model: GEMINI_MODEL });
 
 function extractJson(text) {
   const cleaned = text.replace(/```json|```/g, "").trim();

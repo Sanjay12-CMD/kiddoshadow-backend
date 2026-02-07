@@ -181,6 +181,14 @@ export const processApprovalAction = async ({
   action,
   rejection_reason,
 }) => {
+  const normalizedType = (() => {
+    if (!type) return "";
+    if (type === "student_profile") return "student";
+    if (type === "parent_profile") return "parent";
+    if (type === "teacher_profile") return "teacher";
+    return type;
+  })();
+
   // 1. Validate Action
   const status = action === "approve" ? "approved" : "rejected";
   if (action === "reject" && !rejection_reason) {
@@ -189,19 +197,19 @@ export const processApprovalAction = async ({
 
   // 2. Determine Target Model
   let Model;
-  if (type === "student") Model = Student;
-  else if (type === "teacher") Model = Teacher;
-  else if (type === "parent") Model = Parent;
+  if (normalizedType === "student") Model = Student;
+  else if (normalizedType === "teacher") Model = Teacher;
+  else if (normalizedType === "parent") Model = Parent;
   else throw new AppError("Invalid approval type", 400);
 
   // 3. Find Entity
   const include =
-    type === "parent" ? [{ model: User, attributes: ["school_id"] }] : undefined;
+    normalizedType === "parent" ? [{ model: User, attributes: ["school_id"] }] : undefined;
   const entity = await Model.findByPk(id, include ? { include } : undefined);
   if (!entity) throw new AppError("Entity not found", 404);
 
   const entitySchoolId =
-    type === "parent" ? (entity.user ?? entity.User)?.school_id : entity.school_id;
+    normalizedType === "parent" ? (entity.user ?? entity.User)?.school_id : entity.school_id;
 
   // 4. Permission Check (CRITICAL)
   if (user.role === "teacher") {
