@@ -44,7 +44,7 @@ const Attendance = db.define("attendance", {
   },
 
   status: {
-    type: DataTypes.ENUM("present", "absent", "leave"),
+    type: DataTypes.ENUM("present", "absent", "leave", "on_duty"),
     allowNull: false,
   },
 

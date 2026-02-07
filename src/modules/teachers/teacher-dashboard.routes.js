@@ -12,7 +12,6 @@ router.get(
   "/dashboard",
   protect,
   allowRoles("teacher"),
-  validate(teacherDashboardSchema),
   getTeacherDashboard
 );
 

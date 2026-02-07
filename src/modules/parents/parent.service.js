@@ -180,11 +180,29 @@ export const listParentsService = async ({ school_id, query }) => {
         required: true,
         where: { school_id },
         attributes: ["id", "class_id", "section_id", "user_id"],
+        include: [
+          {
+            model: User,
+            required: true,
+            attributes: ["id", "username", "name", "is_active"],
+          },
+        ],
       },
     ],
     limit,
     offset,
     distinct: true,
     order: [["created_at", "DESC"]],
+  });
+};
+
+/* =========================
+   ADMIN: PARENT OPTIONS
+========================= */
+export const listParentOptionsService = async ({ school_id }) => {
+  return User.findAll({
+    where: { school_id, role: "parent" },
+    attributes: ["id", "username", "name", "phone", "is_active"],
+    order: [["username", "ASC"]],
   });
 };

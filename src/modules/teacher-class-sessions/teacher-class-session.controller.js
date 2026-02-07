@@ -25,3 +25,15 @@ export const endClass = asyncHandler(async (req, res) => {
     data: session,
   });
 });
+
+export const listSessions = asyncHandler(async (req, res) => {
+  const sessions = await service.listSessions({
+    user: req.user,
+    date: req.query.date,
+  });
+
+  res.json({
+    success: true,
+    items: sessions,
+  });
+});

@@ -16,16 +16,15 @@ import { allowRoles } from "../../shared/middlewares/role.js";
 const router = express.Router();
 
 router.use(protect);
-router.use(allowRoles("school_admin")); // Only School Admins can manage subjects
 
 router
     .route("/")
-    .post(validate(createSubjectSchema), createSubject)
-    .get(getAllSubjects);
+    .get(allowRoles("school_admin", "teacher"), getAllSubjects)
+    .post(allowRoles("school_admin"), validate(createSubjectSchema), createSubject);
 
 router
     .route("/:id")
-    .patch(validate(updateSubjectSchema), updateSubject)
-    .delete(deleteSubject);
+    .patch(allowRoles("school_admin"), validate(updateSubjectSchema), updateSubject)
+    .delete(allowRoles("school_admin"), deleteSubject);
 
 export default router;

@@ -4,6 +4,7 @@ import {
   linkExistingParentService,
   updateParentProfileService,
   listParentsService,
+  listParentOptionsService,
 } from "./parent.service.js";
 
 /* =========================
@@ -49,6 +50,21 @@ export const listParents = async (req, res, next) => {
   }
 };
 
+export const listParentOptions = async (req, res, next) => {
+  try {
+    const result = await listParentOptionsService({
+      school_id: req.user.school_id,
+    });
+
+    res.json({
+      total: result.length,
+      items: result,
+    });
+  } catch (e) {
+    next(e);
+  }
+};
+
 /* =========================
    PARENT
 ========================= */
@@ -73,13 +89,13 @@ export const updateParentProfile = async (req, res, next) => {
     const token = jwt.sign(
       {
         id: user.id,
-        role: user.role,
-        school_id: user.school_id,
-        iat: Date.now(),
-      },
-      process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_EXPIRES_IN }
-    );
+      role: user.role,
+      school_id: user.school_id,
+      iat: Date.now(),
+    },
+    process.env.JWT_SECRET,
+    { expiresIn: process.env.JWT_EXPIRES_IN || "7d" }
+  );
 
     res.json({ message: "Profile updated", token, user });
   } catch (e) {

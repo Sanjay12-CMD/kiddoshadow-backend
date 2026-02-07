@@ -5,7 +5,7 @@ export const markAttendanceSchema = z.object({
   records: z.array(
     z.object({
       student_id: z.number().int().positive(),
-      status: z.enum(["present", "absent", "leave"]),
+      status: z.enum(["present", "absent", "leave", "on_duty"]),
     })
   ).min(1),
 });

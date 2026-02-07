@@ -7,6 +7,8 @@ import Teacher from "../teachers/teacher.model.js";
 import Parent from "../parents/parent.model.js";
 import User from "../users/user.model.js";
 import TeacherAssignment from "../teacher-assignments/teacher-assignment.model.js";
+import Class from "../classes/classes.model.js";
+import Section from "../sections/section.model.js";
 
 const resolveSchoolId = (school_id, user) => {
   const resolved = school_id ?? user?.school_id;
@@ -78,6 +80,14 @@ export const getPendingStudentApprovalsService = async ({
     limit,
     offset,
     order: [["updated_at", "DESC"]],
+    include: [
+      {
+        model: User,
+        attributes: ["id", "name", "username", "email", "phone"],
+      },
+      { model: Class, attributes: ["id", "class_name"] },
+      { model: Section, attributes: ["id", "name"] },
+    ],
   });
 };
 
@@ -143,7 +153,15 @@ export const getPendingParentApprovalsService = async ({
         model: User,
         required: true,
         where: { school_id: scopedSchoolId }, // FIXED: school scoped
-        attributes: [],
+        attributes: ["id", "name", "username", "email", "phone"],
+      },
+      {
+        model: Student,
+        include: [
+          { model: User, attributes: ["id", "name", "username"] },
+          { model: Class, attributes: ["id", "class_name"] },
+          { model: Section, attributes: ["id", "name"] },
+        ],
       },
     ],
     limit,

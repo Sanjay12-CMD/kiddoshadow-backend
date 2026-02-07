@@ -26,7 +26,7 @@ Response: `{ school, admin }` (from service)
 GET `/api/schools`
 Roles: super_admin
 Query: `limit`, `offset`, optional filters (see service)
-Response: `{ count, rows }`
+Response: `{ count, rows }` (each row includes `users` array with school_admin user: `id`, `username`, `is_active`, `first_login`)
 
 PATCH `/api/schools/:id/status`
 Roles: super_admin
@@ -119,8 +119,13 @@ Response: `{ "created": 1, "student": { ... }, "students": [ ... ] }`
 
 GET `/api/students`
 Roles: school_admin
-Query: `limit`, `offset`
+Query: `limit`, `offset`, `class_id?`, `section_id?`
 Response: `{ "total": number, "items": [ { student + user + class + section } ] }`
+
+GET `/api/students/options`
+Roles: school_admin
+Query: `class_id?`, `section_id?`
+Response: `{ "total": number, "items": [ { id, class_id, section_id, roll_no, admission_no, user, class, section } ] }`
 
 PATCH `/api/students/:id/move`
 Roles: school_admin
@@ -168,6 +173,10 @@ GET `/api/teachers`
 Roles: school_admin
 Query: `limit`, `offset`
 Response: `{ "total": number, "items": [ { teacher + user } ] }`
+
+GET `/api/teachers/options`
+Roles: school_admin
+Response: `{ "total": number, "items": [ { id, user_id, employee_id, approval_status, is_active, user } ] }`
 
 PATCH `/api/teachers/:id/status`
 Roles: school_admin
@@ -220,7 +229,11 @@ Response: `{ "parent_user_id": number, "student_id": number }`
 GET `/api/parents/parents`
 Roles: school_admin
 Query: `limit`, `offset`, `approval_status` (pending|approved|rejected)
-Response: `{ "total": number, "items": [ { parent + user + student } ] }`
+Response: `{ "total": number, "items": [ { parent + user + student (includes student.user) } ] }`
+
+GET `/api/parents/parents/options`
+Roles: school_admin
+Response: `{ "total": number, "items": [ { id, username, name, phone, is_active } ] }`
 
 Parents (self)
 PATCH `/api/parents/parents/profile`
@@ -287,7 +300,7 @@ Response: `{ "message": "Request processed successfully", "result": { ... } }`
 Bulk Seeder
 POST `/api/bulk/bulk-create`
 Roles: school_admin
-Request: `{ "classes": [ { name, sections: [ { name, students } ] } ] | { [name]: { sections } }, "teacher_count"?: number, "students_per_section"?: number }`
+Request: `{ "classes": [ { "name": "Class 6", "sections": [ { "name": "A", "students": 30 } ] } ], "teacher_count"?: number }`
 Response: `{ "message": "Data created successfully", "summary": { classes_created, teachers_created, students_created, ... } }`
 
 POST `/api/bulk/create`
@@ -478,15 +491,15 @@ RAG
 POST `/api/rag/ask`
 Roles: student, teacher, parent
 Query: `voice=true` (optional, returns audio/wav stream)
-Request: `{ "question": "string", "classLevel"?: "string|number" }`
-Response (text): `{ "question": "string", "answer": "string", "sources": [ ... ] }`
+Request: `{ "question": "string", "classLevel"?: "string|number", "subject"?: "string" }`
+Response (text): `{ "question": "string", "answer": "string", "sources": [ ... ], "source_type"?: "rag|none", "filters_used"?: "class_subject|class|null" }`
 Response (voice): `audio/wav` stream
 
 Teacher AI
 POST `/api/teacher/ai`
 Roles: teacher
 Request: `{ "aiType": "string", "payload": { ... } }`
-Response: `{ "aiType": "string", "result": { ... } }`
+Response: `{ "aiType": "string", "result": { "text": "string", "source_type": "rag|gemini", "sources": ["..."], "filters_used": "class_subject|class|global|null" } }`
 
 AI Analytics
 GET `/api/analytics/ai/school`

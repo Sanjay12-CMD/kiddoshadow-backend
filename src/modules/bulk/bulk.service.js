@@ -5,7 +5,7 @@ import User from "../users/user.model.js";
 import Teacher from "../teachers/teacher.model.js";
 import Student from "../students/student.model.js";
 import Parent from "../parents/parent.model.js";
-import AppError from "../../shared/appError.js";  
+import AppError from "../../shared/appError.js";
 
 const buildTeacherUsername = (schoolId, serial) =>
   `TCH-${schoolId}-${String(serial).padStart(3, "0")}`;
@@ -25,7 +25,6 @@ export const bulkCreateDataService = async ({
   school_id,
   classes,
   teacher_count = 10,
-  students_per_section = 20,
 }) => {
   return db.transaction(async (t) => {
     /* ================================
@@ -89,25 +88,13 @@ export const bulkCreateDataService = async ({
     }
 
     /* ================================
-       2️⃣ NORMALIZE CLASS INPUT
+       2️⃣ VALIDATE CLASS INPUT
     ================================= */
-    let classEntries = [];
-
-    if (Array.isArray(classes)) {
-      classEntries = classes.map((c) =>
-        typeof c === "string"
-          ? { name: c, sections: [{ name: "A", students: students_per_section }] }
-          : {
-              name: c.name,
-              sections: c.sections || [{ name: "A", students: students_per_section }],
-            }
-      );
-    } else if (classes && typeof classes === "object") {
-      classEntries = Object.entries(classes).map(([name, cfg]) => ({
-        name,
-        sections: cfg.sections || [{ name: "A", students: students_per_section }],
-      }));
+    if (!Array.isArray(classes) || classes.length === 0) {
+      throw new AppError("classes must be a non-empty array", 400);
     }
+
+    const classEntries = classes;
 
     /* ================================
        3️⃣ CREATE CLASSES, SECTIONS,

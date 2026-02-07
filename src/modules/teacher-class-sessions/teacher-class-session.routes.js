@@ -6,10 +6,12 @@ import { validate } from "../../shared/middlewares/validate.js";
 import {
   startClass,
   endClass,
+  listSessions,
 } from "./teacher-class-session.controller.js";
 
 import {
   startClassSessionSchema,
+  listClassSessionSchema,
 } from "./teacher-class-session.schema.js";
 
 const router = express.Router();
@@ -27,6 +29,14 @@ router.post(
   protect,
   allowRoles("teacher"),
   endClass
+);
+
+router.get(
+  "/",
+  protect,
+  allowRoles("teacher"),
+  validate(listClassSessionSchema),
+  listSessions
 );
 
 export default router;

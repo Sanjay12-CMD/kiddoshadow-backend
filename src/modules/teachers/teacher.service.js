@@ -97,6 +97,23 @@ export const listTeachersService = async ({ school_id, query }) => {
 };
 
 /* =========================
+   ADMIN: OPTIONS (DROPDOWN)
+========================= */
+export const listTeacherOptionsService = async ({ school_id }) => {
+  return Teacher.findAll({
+    where: { school_id },
+    include: [
+      {
+        model: User,
+        attributes: ["id", "username", "name", "is_active"],
+      },
+    ],
+    attributes: ["id", "user_id", "employee_id", "approval_status", "is_active"],
+    order: [[User, "username", "ASC"]],
+  });
+};
+
+/* =========================
    ADMIN: STATUS
 ========================= */
 export const updateTeacherStatusService = async ({

@@ -93,6 +93,7 @@ API: `POST /api/teachers/approvals/:type/:id/:action`
 
 8. Use teacher AI tools
 API: `POST /api/teacher/ai`
+Note: Teacher selects class + subject; AI uses RAG context when available, otherwise falls back to Gemini.
 
 Student Flow
 1. Student logs in

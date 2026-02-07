@@ -3,11 +3,14 @@ import AppError from "../../shared/appError.js";
 import AiChatLog from "../ai-chat-logs/ai-chat-log.model.js";
 import { deductTokens } from "../tokens/token.service.js";
 import { PROMPTS } from "./teacher-ai.prompts.js";
+import { retrieveRagContext, formatRagSources } from "../rag/rag.service.js";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
+const GEMINI_MODEL = process.env.GEMINI_MODEL ;
+
 const chatModel = genAI.getGenerativeModel({
-  model: "gemini-1.5-flash",
+  model: GEMINI_MODEL,
 });
 
 export async function runTeacherAI({ user, aiType, payload }) {
@@ -22,8 +25,42 @@ export async function runTeacherAI({ user, aiType, payload }) {
     throw new AppError("Invalid teacher AI task", 400);
   }
 
-  // 🧠 Build prompt
-  const prompt = promptBuilder(payload);
+  // 🧠 Build prompt (ensure subject fallback for legacy templates)
+  const safePayload = { subject: "General", ...payload };
+  let prompt = promptBuilder(safePayload);
+
+  // 🔍 Optional RAG context (for lesson summary / question paper / homework / quiz)
+  let sourceType = "gemini";
+  let sources = [];
+  let filtersUsed = null;
+
+  const ragQuery = payload?.topic || payload?.chapter;
+  const hasScope = payload?.classLevel;
+
+  if (ragQuery && hasScope) {
+    const context = await retrieveRagContext({
+      query: ragQuery,
+      classLevel: payload.classLevel,
+      allowGlobal: true,
+    });
+
+    filtersUsed = context.filter;
+
+    if (context.chunks.length) {
+      const ragText = context.chunks.join("\n\n");
+      prompt = `
+${prompt}
+
+Use the textbook context below first. If it is insufficient, you may add general knowledge.
+
+Textbook context:
+${ragText}
+`;
+
+      sourceType = "rag";
+      sources = formatRagSources(context.metadatas);
+    }
+  }
 
   // 🤖 Call Gemini
   const result = await chatModel.generateContent(prompt);
@@ -38,7 +75,7 @@ export async function runTeacherAI({ user, aiType, payload }) {
     user_query: JSON.stringify(payload),
     ai_response: output,
     tokens_used: tokensUsed,
-    model_used: "gemini-1.5-flash",
+      model_used: GEMINI_MODEL,
     ai_type: aiType,
     class_level: payload.classLevel ?? null,
   });
@@ -53,5 +90,10 @@ export async function runTeacherAI({ user, aiType, payload }) {
     });
   }
 
-  return output;
+  return {
+    text: output,
+    source_type: sourceType,
+    sources,
+    filters_used: filtersUsed,
+  };
 }

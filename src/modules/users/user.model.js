@@ -1,6 +1,6 @@
 import { DataTypes } from "sequelize";
 import db from "../../config/db.js";
-// imports removed to prevent circular dependency
+
 
 const User = db.define(
   "user",

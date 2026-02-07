@@ -5,6 +5,7 @@ import {
   createTeacherService,
   listTeachersService,
   updateTeacherStatusService,
+  listTeacherOptionsService,
 } from "./teacher.service.js";
 import Teacher from "./teacher.model.js";
 import User from "../users/user.model.js";
@@ -30,6 +31,18 @@ export const listTeachers = asyncHandler(async (req, res) => {
   res.json({
     total: result.count,
     items: result.rows,
+  });
+});
+
+/* ADMIN: OPTIONS */
+export const listTeacherOptions = asyncHandler(async (req, res) => {
+  const result = await listTeacherOptionsService({
+    school_id: req.user.school_id,
+  });
+
+  res.json({
+    total: result.length,
+    items: result,
   });
 });
 
@@ -87,7 +100,7 @@ export const completeTeacherProfile = asyncHandler(async (req, res) => {
       iat: Date.now(),
     },
     process.env.JWT_SECRET,
-    { expiresIn: process.env.JWT_EXPIRES_IN }
+    { expiresIn: process.env.JWT_EXPIRES_IN || "7d" }
   );
 
   res.json({ message: "Profile completed", token, user });

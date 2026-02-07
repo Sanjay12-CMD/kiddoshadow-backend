@@ -7,6 +7,8 @@ import {
   moveStudentService,
   updateStudentStatusService,
   assignStudentsToSectionService,
+  listStudentsForTeacherSectionService,
+  listStudentOptionsService,
 } from "./student.service.js";
 import Student from "./student.model.js";
 import User from "../users/user.model.js";
@@ -108,7 +110,7 @@ export const completeStudentProfile = asyncHandler(async (req, res) => {
       iat: Date.now(),
     },
     process.env.JWT_SECRET,
-    { expiresIn: process.env.JWT_EXPIRES_IN }
+    { expiresIn: process.env.JWT_EXPIRES_IN || "7d" }
   );
 
   res.json({ message: "Profile completed", token, user: req.user });
@@ -145,5 +147,31 @@ export const assignStudentsToSection = asyncHandler(async (req, res) => {
   res.json({
     success: true,
     message: "Students assigned successfully",
+  });
+});
+
+/* ADMIN: OPTIONS */
+export const listStudentOptions = asyncHandler(async (req, res) => {
+  const result = await listStudentOptionsService({
+    school_id: req.user.school_id,
+    query: req.query,
+  });
+
+  res.json({
+    total: result.length,
+    items: result,
+  });
+});
+
+/* TEACHER: LIST STUDENTS IN ASSIGNED SECTION */
+export const listStudentsForTeacherSection = asyncHandler(async (req, res) => {
+  const result = await listStudentsForTeacherSectionService({
+    user: req.user,
+    query: req.query,
+  });
+
+  res.json({
+    total: result.length,
+    items: result,
   });
 });

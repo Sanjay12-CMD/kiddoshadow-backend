@@ -1,4 +1,5 @@
 import Notification from "./notification.model.js";
+import NotificationAck from "./notification-ack.model.js";
 import AppError from "../../shared/appError.js";
 import { Op } from "sequelize";
 
@@ -39,33 +40,43 @@ export const createNotificationService = async ({
 export const listNotificationsForUserService = async ({
   school_id,
   user_role,
+  user_id,
   class_ids = [],
   section_ids = [],
 }) => {
   const roleTargets =
-    user_role === "teacher" ? [user_role] : [user_role, "all"];
+    user_role === "teacher" ? [user_role, "all"] : [user_role, "all"];
 
-  const where = {
-    school_id,
-    target_role: { [Op.in]: roleTargets },
-  };
-  const orConditions = [];
+  // Base audience filter
+  const audienceFilter = { target_role: { [Op.in]: roleTargets } };
 
-  // Notifications with no class/section targeting (broadcast to all in role)
-  orConditions.push({ class_id: null });
+  // Teachers should also see notifications they created (even if targeted to students/parents)
+  const audienceOrCreator =
+    user_role === "teacher"
+      ? { [Op.or]: [audienceFilter, { sender_user_id: user_id }] }
+      : audienceFilter;
 
-  if (class_ids.length) {
-    orConditions.push({ class_id: { [Op.in]: class_ids } });
-  }
-
-  where[Op.or] = orConditions;
-
-  if (section_ids.length) {
-    where[Op.or].push({ section_id: { [Op.in]: section_ids } });
-  }
+  // Class/section scope
+  const scopeConditions = [{ class_id: null }];
+  if (class_ids.length) scopeConditions.push({ class_id: { [Op.in]: class_ids } });
+  if (section_ids.length) scopeConditions.push({ section_id: { [Op.in]: section_ids } });
 
   return Notification.findAndCountAll({
-    where,
+    where: {
+      school_id,
+      [Op.and]: [
+        audienceOrCreator,
+        { [Op.or]: scopeConditions },
+      ],
+    },
+    include: [
+      {
+        model: NotificationAck,
+        attributes: ["id", "user_id", "acknowledged_at"],
+        required: false,
+        where: { user_id },
+      },
+    ],
     order: [["created_at", "DESC"]],
   });
 };

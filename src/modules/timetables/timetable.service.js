@@ -132,6 +132,7 @@ export const getSectionTimetableService = async ({
             attributes: ["id", "name"],
           },
         ],
+        attributes: ["id", "teacher_id", "subject_id"],
       },
     ],
     order: [
@@ -155,9 +156,10 @@ export const getSectionTimetableService = async ({
       end_time: row.end_time,
       is_break: row.is_break,
       title: row.is_break ? row.title : null,
-      subject: row.is_break
-        ? null
-        : row.teacher_assignment.subject,
+      teacher_assignment_id: row.teacher_assignment?.id ?? null,
+      teacher_id: row.teacher_assignment?.teacher_id ?? null,
+      subject_id: row.teacher_assignment?.subject_id ?? null,
+      subject: row.is_break ? null : row.teacher_assignment?.subject,
     });
   }
 
@@ -187,6 +189,7 @@ export const getTeacherTimetableService = async ({
             attributes: ["id", "name"],
           },
         ],
+        attributes: ["id", "teacher_id", "subject_id"],
       },
       {
         model: Class,
@@ -218,7 +221,9 @@ export const getTeacherTimetableService = async ({
       end_time: row.end_time,
       class: row.class,
       section: row.section,
-      subject: row.teacher_assignment.subject,
+      teacher_assignment_id: row.teacher_assignment?.id ?? null,
+      subject_id: row.teacher_assignment?.subject_id ?? null,
+      subject: row.teacher_assignment?.subject,
     });
   }
 

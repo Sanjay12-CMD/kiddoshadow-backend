@@ -1,51 +1,110 @@
 import { ChromaClient } from "chromadb";
-import path from "path";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import AiChatLog from "../ai-chat-logs/ai-chat-log.model.js";
 import { deductTokens } from "../tokens/token.service.js";
 
-const PROJECT_ROOT = process.cwd();
-const CHROMA_PATH = path.join(PROJECT_ROOT, "rag_data", "chroma");
+const CHROMA_URL = process.env.CHROMA_URL || "http://localhost:8000";
 const COLLECTION_NAME = "cbse_books";
 
 // Gemini setup
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-
-const embeddingModel = genAI.getGenerativeModel({
-  model: "text-embedding-004",
-});
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-1.5-flash";
 
 const chatModel = genAI.getGenerativeModel({
-  model: "gemini-1.5-flash",
+  model: GEMINI_MODEL,
 });
 
 // Chroma setup
-const chroma = new ChromaClient({ path: CHROMA_PATH });
+const chromaUrl = new URL(
+  CHROMA_URL.startsWith("http") ? CHROMA_URL : `http://${CHROMA_URL}`
+);
+const chroma = new ChromaClient({
+  host: chromaUrl.hostname,
+  port: chromaUrl.port
+    ? Number(chromaUrl.port)
+    : chromaUrl.protocol === "https:"
+    ? 443
+    : 80,
+  ssl: chromaUrl.protocol === "https:",
+});
 
-async function embed(text) {
-  const res = await embeddingModel.embedContent(text);
-  return res.embedding.values;
-}
+const normalizeClassLevel = (value) => {
+  if (!value) return null;
+  const str = String(value).trim().toLowerCase();
+  const digitMatch = str.match(/\d+/);
+  if (digitMatch) return digitMatch[0];
+  return str.replace(/^class\s*/, "");
+};
 
-export async function askRag({ question, classLevel, userId }) {
+export const formatRagSources = (metadatas) => {
+  if (!Array.isArray(metadatas)) return [];
+  return [
+    ...new Set(
+      metadatas.map((m) => {
+        const title = m.chapter || m.book || "Source";
+        return `Class ${m.class} - ${title}`;
+      })
+    ),
+  ];
+};
+
+export async function retrieveRagContext({
+  query,
+  classLevel,
+  allowGlobal = false,
+}) {
   const collection = await chroma.getCollection({
     name: COLLECTION_NAME,
   });
 
-  const queryEmbedding = await embed(question);
+  const normalizedClass = normalizeClassLevel(classLevel);
 
-  const results = await collection.query({
-    queryEmbeddings: [queryEmbedding],
-    nResults: 5,
-    where: classLevel ? { class: String(classLevel) } : undefined,
+  const filters = [];
+  if (normalizedClass) {
+    filters.push({
+      label: "class",
+      where: { class: String(normalizedClass) },
+    });
+  }
+  if (allowGlobal) {
+    filters.push({ label: "global", where: undefined });
+  }
+
+  for (const filter of filters) {
+    const results = await collection.query({
+      queryTexts: [query],
+      nResults: 5,
+      where: filter.where,
+    });
+
+    const chunks = results.documents.flat();
+    if (chunks.length) {
+      return {
+        chunks,
+        metadatas: results.metadatas.flat(),
+        filter: filter.label,
+        classLevel: normalizedClass,
+      };
+    }
+  }
+
+  return {
+    chunks: [],
+    metadatas: [],
+    filter: null,
+    classLevel: normalizedClass,
+  };
+}
+
+export async function askRag({ question, classLevel, userId }) {
+  const context = await retrieveRagContext({
+    query: question,
+    classLevel,
+    allowGlobal: false,
   });
 
-  const chunks = results.documents.flat();
-  const metadatas = results.metadatas.flat();
-
-  const sources = [
-    ...new Set(metadatas.map(m => `Class ${m.class} - ${m.book}`)),
-  ];
+  const chunks = context.chunks;
+  const sources = formatRagSources(context.metadatas);
 
   let answer;
   let tokensUsed = 0;
@@ -82,7 +141,7 @@ Answer (simple, clear, student-friendly):
     user_query: question,
     ai_response: answer,
     tokens_used: tokensUsed,
-    model_used: "gemini-1.5-flash",
+    model_used: GEMINI_MODEL,
     ai_type: "rag",
     class_level: classLevel ?? null,
   });
@@ -100,5 +159,7 @@ Answer (simple, clear, student-friendly):
   return {
     answer,
     sources,
+    source_type: chunks.length ? "rag" : "none",
+    filters_used: context.filter,
   };
 }

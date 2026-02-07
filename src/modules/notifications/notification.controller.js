@@ -46,9 +46,26 @@ export const listNotifications = asyncHandler(async (req, res) => {
       .filter((v) => v !== undefined && v !== null);
   }
 
+  if (req.user.role === "teacher") {
+    const TeacherAssignment = (await import("../teacher-assignments/teacher-assignment.model.js")).default;
+    const assignments = await TeacherAssignment.findAll({
+      where: { teacher_id: req.user.id },
+      attributes: ["class_id", "section_id"],
+    });
+    classIds = [
+      ...classIds,
+      ...assignments.map((a) => a.class_id).filter(Boolean),
+    ];
+    sectionIds = [
+      ...sectionIds,
+      ...assignments.map((a) => a.section_id).filter(Boolean),
+    ];
+  }
+
   const result = await listNotificationsForUserService({
     school_id: req.user.school_id,
     user_role: req.user.role,
+    user_id: req.user.id,
     class_ids: classIds,
     section_ids: sectionIds,
   });
@@ -56,6 +73,14 @@ export const listNotifications = asyncHandler(async (req, res) => {
   res.json({
     success: true,
     total: result.count,
-    items: result.rows,
+    items: result.rows.map((row) => {
+      const plain = row.toJSON();
+      const ack = plain.notification_acks?.[0];
+      return {
+        ...plain,
+        is_acknowledged: Boolean(ack),
+        acknowledged_at: ack?.acknowledged_at || null,
+      };
+    }),
   });
 });

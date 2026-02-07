@@ -2,6 +2,7 @@ import User from "../users/user.model.js";
 import Student from "./student.model.js";
 import Class from "../classes/classes.model.js";
 import Section from "../sections/section.model.js";
+import TeacherAssignment from "../teacher-assignments/teacher-assignment.model.js";
 import AppError from "../../shared/appError.js";
 import { getPagination } from "../../shared/utils/pagination.js";
 import db from "../../config/db.js";
@@ -112,9 +113,13 @@ export const createStudentService = async ({
 
 export const listStudentsService = async ({ school_id, query }) => {
   const { limit, offset } = getPagination(query);
+  const where = { school_id };
+
+  if (query?.class_id) where.class_id = Number(query.class_id);
+  if (query?.section_id) where.section_id = Number(query.section_id);
 
   return Student.findAndCountAll({
-    where: { school_id },
+    where,
     limit,
     offset,
     include: [
@@ -124,6 +129,62 @@ export const listStudentsService = async ({ school_id, query }) => {
     ],
     order: [["created_at", "DESC"]],
   });
+};
+
+/* =========================
+   ADMIN: OPTIONS (DROPDOWN)
+========================= */
+export const listStudentOptionsService = async ({ school_id, query }) => {
+  const where = { school_id };
+
+  if (query?.class_id) where.class_id = Number(query.class_id);
+  if (query?.section_id) where.section_id = Number(query.section_id);
+
+  return Student.findAll({
+    where,
+    include: [
+      { model: User, attributes: ["id", "username", "name", "is_active"] },
+      { model: Class, attributes: ["id", "class_name"] },
+      { model: Section, attributes: ["id", "name"] },
+    ],
+    attributes: ["id", "class_id", "section_id", "roll_no", "admission_no"],
+    order: [[User, "username", "ASC"]],
+  });
+};
+
+// Teacher scoped students (by their assignments)
+export const listStudentsForTeacherSectionService = async ({ user, query }) => {
+  const assignments = await TeacherAssignment.findAll({
+    where: { teacher_id: user.teacher_id, school_id: user.school_id, is_active: true },
+    attributes: ["class_id", "section_id"],
+  });
+
+  const allowedSectionIds = [...new Set(assignments.map((a) => a.section_id))];
+  const allowedClassIds = [...new Set(assignments.map((a) => a.class_id))];
+
+  if (!allowedSectionIds.length) return [];
+
+  const where = {
+    school_id: user.school_id,
+    section_id: allowedSectionIds,
+    class_id: allowedClassIds,
+  };
+
+  if (query?.class_id) where.class_id = Number(query.class_id);
+  if (query?.section_id) where.section_id = Number(query.section_id);
+
+  const students = await Student.findAll({
+    where,
+    include: [
+      { model: User, attributes: ["id", "username", "name"] },
+      { model: Class, attributes: ["id", "class_name"] },
+      { model: Section, attributes: ["id", "name"] },
+    ],
+    attributes: ["id", "class_id", "section_id", "roll_no", "admission_no"],
+    order: [[User, "username", "ASC"]],
+  });
+
+  return students;
 };
 
 /* =========================

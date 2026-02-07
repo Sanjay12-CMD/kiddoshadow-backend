@@ -67,7 +67,18 @@ if (existingUser) {
 ========================= */
 export const listSchoolsService = async ({ query }) => {
   const { limit, offset } = getPagination(query);
-  return School.findAndCountAll({ limit, offset });
+  return School.findAndCountAll({
+    limit,
+    offset,
+    include: [
+      {
+        model: User,
+        where: { role: "school_admin" },
+        required: false,
+        attributes: ["id", "username", "is_active", "first_login"],
+      },
+    ],
+  });
 };
 
 /* =========================
