@@ -2,6 +2,8 @@ import Notification from "./notification.model.js";
 import NotificationAck from "./notification-ack.model.js";
 import AppError from "../../shared/appError.js";
 import { Op } from "sequelize";
+import User from "../users/user.model.js";
+import School from "../schools/school.model.js";
 
 export const createNotificationService = async ({
   school_id,
@@ -70,6 +72,16 @@ export const listNotificationsForUserService = async ({
       ],
     },
     include: [
+      {
+        model: User,
+        attributes: ["id", "name", "avatar_url", "role"],
+        required: false,
+      },
+      {
+        model: School,
+        attributes: ["id", "school_name", "logo_url"],
+        required: false,
+      },
       {
         model: NotificationAck,
         attributes: ["id", "user_id", "acknowledged_at"],

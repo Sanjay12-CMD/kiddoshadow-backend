@@ -112,6 +112,7 @@ import ragRoutes from "./src/modules/rag/rag.routes.js";
 import teacherAiRoutes from "./src/modules/teacher-ai/teacher-ai.routes.js";
 import aiAnalyticsRoutes from "./src/modules/ai-analytics/ai-analytics.routes.js";
 import subscriptionRoutes from "./src/modules/subscriptions/subscription.routes.js";
+import tokenRoutes from "./src/modules/tokens/token.routes.js";
 
 // teacher planning & tracking
 import teacherAssignmentRoutes from "./src/modules/teacher-assignments/teacher-assignment.routes.js";
@@ -130,6 +131,9 @@ app.use("/api/auth", authRoutes);
 // attendance (MOVED UP to prevent teacherRoutes masking)
 app.use("/api", attendanceSummaryRoutes);
 app.use("/api", attendanceAnalyticsRoutes);
+// backward-compatible prefix for attendance routes
+app.use("/api/attendance", attendanceSummaryRoutes);
+app.use("/api/attendance", attendanceAnalyticsRoutes);
 
 // core
 app.use("/api/schools", schoolRoutes);
@@ -163,6 +167,8 @@ app.use("/api/bulk", bulkRoutes);
 
 // subscriptions
 app.use("/api", subscriptionRoutes);
+// tokens (super admin)
+app.use("/api", tokenRoutes);
 
 // AI
 app.use("/api/rag", ragRoutes);

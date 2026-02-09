@@ -6,7 +6,9 @@ import HomeworkSubmission from "../homework/homework-submission.model.js";
 import Student from "../students/student.model.js";
 import ReportCard from "../report-cards/report-card.model.js";
 import TeacherAssignment from "../teacher-assignments/teacher-assignment.model.js";
-import { Op } from "sequelize";
+import TokenAccount from "../tokens/token-account.model.js";
+import { ensureTokenAccount } from "../tokens/token.service.js";
+import AiChatLog from "../ai-chat-logs/ai-chat-log.model.js";
 
 const getToday = () => new Date().toISOString().slice(0, 10);
 const getDayName = () =>
@@ -14,14 +16,24 @@ const getDayName = () =>
     .toLocaleDateString("en-US", { weekday: "long" })
     .toLowerCase();
 
+const ALLOWED_DAYS = new Set([
+  "monday",
+  "tuesday",
+  "wednesday",
+  "thursday",
+  "friday",
+  "saturday",
+]);
+
 export const getTeacherDashboardService = async ({
   school_id,
   teacher_id,
+  user_id,
 }) => {
   const today = getToday();
   const day = getDayName();
 
-  /* 1️⃣ Classes handled by teacher */
+  /* 1) Classes handled by teacher */
   const assignments = await TeacherAssignment.findAll({
     where: {
       school_id,
@@ -31,9 +43,7 @@ export const getTeacherDashboardService = async ({
     attributes: ["class_id", "section_id"],
   });
 
-  const classIds = [
-    ...new Set(assignments.map((a) => a.class_id)),
-  ];
+  const classIds = [...new Set(assignments.map((a) => a.class_id))];
   const sectionIds = assignments.map((a) => a.section_id);
 
   const classes = classIds.length
@@ -49,20 +59,21 @@ export const getTeacherDashboardService = async ({
       })
     : [];
 
-  /* 2️⃣ Timetable (today) */
-  const timetable = classIds.length
-    ? await Timetable.findAll({
-        where: {
-          school_id,
-          class_id: classIds,
-          section_id: sectionIds,
-          day_of_week: day,
-        },
-        order: [["start_time", "ASC"]],
-      })
-    : [];
+  /* 2) Timetable (today) */
+  const timetable =
+    classIds.length && ALLOWED_DAYS.has(day)
+      ? await Timetable.findAll({
+          where: {
+            school_id,
+            class_id: classIds,
+            section_id: sectionIds,
+            day_of_week: day,
+          },
+          order: [["start_time", "ASC"]],
+        })
+      : [];
 
-  /* 3️⃣ Homework (today) */
+  /* 3) Homework (today) */
   const homework = classIds.length
     ? await Homework.findAll({
         where: {
@@ -76,11 +87,9 @@ export const getTeacherDashboardService = async ({
 
   const homeworkIds = homework.map((h) => h.id);
 
-  /* 4️⃣ Homework completion */
+  /* 4) Homework completion */
   const submissions = await HomeworkSubmission.findAll({
-    where: {
-      homework_id: homeworkIds,
-    },
+    where: { homework_id: homeworkIds },
   });
 
   const submissionCountMap = {};
@@ -110,13 +119,12 @@ export const getTeacherDashboardService = async ({
         description: h.description,
         completed: submissionCountMap[h.id] || 0,
         total_students: totalStudents,
-        pending:
-          totalStudents - (submissionCountMap[h.id] || 0),
+        pending: totalStudents - (submissionCountMap[h.id] || 0),
       };
     })
   );
 
-  /* 5️⃣ Pending report cards */
+  /* 5) Pending report cards */
   const pendingReportCards = classIds.length
     ? await ReportCard.count({
         where: {
@@ -126,10 +134,24 @@ export const getTeacherDashboardService = async ({
       })
     : 0;
 
+  // 6) AI Tokens (lifetime used + current balance)
+  await ensureTokenAccount(user_id);
+  const tokenAccount = await TokenAccount.findOne({
+    where: { user_id },
+    attributes: ["balance"],
+  });
+  const usedTotal = await AiChatLog.sum("tokens_used", {
+    where: { user_id },
+  });
+  const used = usedTotal || 0;
+  const remaining = tokenAccount?.balance ?? 0;
+  const total = used + remaining;
+
   return {
     classes,
     timetable,
     homework_summary: homeworkSummary,
     pending_report_cards: pendingReportCards,
+    ai_tokens: { total, used, remaining },
   };
 };

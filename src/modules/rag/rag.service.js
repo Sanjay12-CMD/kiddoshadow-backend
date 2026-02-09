@@ -1,5 +1,5 @@
 import { ChromaClient } from "chromadb";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenAI } from "@google/genai";
 import AiChatLog from "../ai-chat-logs/ai-chat-log.model.js";
 import { deductTokens } from "../tokens/token.service.js";
 
@@ -7,12 +7,8 @@ const CHROMA_URL = process.env.CHROMA_URL || "http://localhost:8000";
 const COLLECTION_NAME = "cbse_books";
 
 // Gemini setup
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-1.5-flash";
-
-const chatModel = genAI.getGenerativeModel({
-  model: GEMINI_MODEL,
-});
+const GEMINI_MODEL = (process.env.GEMINI_MODEL || "gemini-2.5-flash-lite").replace(/^models\//, "");
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 // Chroma setup
 const chromaUrl = new URL(
@@ -36,6 +32,79 @@ const normalizeClassLevel = (value) => {
   return str.replace(/^class\s*/, "");
 };
 
+const STOPWORDS = new Set([
+  "the",
+  "and",
+  "or",
+  "of",
+  "to",
+  "a",
+  "an",
+  "in",
+  "on",
+  "for",
+  "with",
+  "about",
+  "tell",
+  "what",
+  "is",
+  "are",
+  "was",
+  "were",
+  "do",
+  "does",
+  "did",
+  "i",
+  "you",
+  "we",
+  "they",
+  "he",
+  "she",
+  "it",
+]);
+
+const extractKeywords = (text) => {
+  const words = String(text || "")
+    .toLowerCase()
+    .match(/[a-z0-9]+/g);
+  if (!words) return [];
+  return words.filter((w) => w.length >= 4 && !STOPWORDS.has(w));
+};
+
+const keywordSearch = async ({ collection, query, limit = 5 }) => {
+  const keywords = extractKeywords(query);
+  if (!keywords.length) {
+    return { chunks: [], metadatas: [] };
+  }
+
+  // Fetch all docs (small dataset) and score by keyword hits
+  const all = await collection.get({
+    limit: 10000,
+    include: ["documents", "metadatas"],
+  });
+
+  const scored = [];
+  for (let i = 0; i < (all.documents || []).length; i++) {
+    const doc = all.documents[i] || "";
+    const lower = doc.toLowerCase();
+    let score = 0;
+    for (const k of keywords) {
+      if (lower.includes(k)) score += 1;
+    }
+    if (score > 0) {
+      scored.push({ doc, meta: all.metadatas?.[i] || null, score });
+    }
+  }
+
+  scored.sort((a, b) => b.score - a.score);
+  const top = scored.slice(0, limit);
+
+  return {
+    chunks: top.map((t) => t.doc),
+    metadatas: top.map((t) => t.meta),
+  };
+};
+
 export const formatRagSources = (metadatas) => {
   if (!Array.isArray(metadatas)) return [];
   return [
@@ -51,48 +120,22 @@ export const formatRagSources = (metadatas) => {
 export async function retrieveRagContext({
   query,
   classLevel,
-  allowGlobal = false,
+  allowGlobal = true,
 }) {
   const collection = await chroma.getCollection({
     name: COLLECTION_NAME,
   });
 
-  const normalizedClass = normalizeClassLevel(classLevel);
-
-  const filters = [];
-  if (normalizedClass) {
-    filters.push({
-      label: "class",
-      where: { class: String(normalizedClass) },
-    });
-  }
-  if (allowGlobal) {
-    filters.push({ label: "global", where: undefined });
-  }
-
-  for (const filter of filters) {
-    const results = await collection.query({
-      queryTexts: [query],
-      nResults: 5,
-      where: filter.where,
-    });
-
-    const chunks = results.documents.flat();
-    if (chunks.length) {
-      return {
-        chunks,
-        metadatas: results.metadatas.flat(),
-        filter: filter.label,
-        classLevel: normalizedClass,
-      };
-    }
-  }
+  const results = await collection.query({
+    queryTexts: [query],
+    nResults: 5,
+  });
 
   return {
-    chunks: [],
-    metadatas: [],
-    filter: null,
-    classLevel: normalizedClass,
+    chunks: results.documents.flat(),
+    metadatas: results.metadatas.flat(),
+    filter: "global",
+    classLevel: normalizeClassLevel(classLevel),
   };
 }
 
@@ -100,19 +143,33 @@ export async function askRag({ question, classLevel, userId }) {
   const context = await retrieveRagContext({
     query: question,
     classLevel,
-    allowGlobal: false,
+    allowGlobal: true,
   });
 
   const chunks = context.chunks;
-  const sources = formatRagSources(context.metadatas);
 
   let answer;
   let tokensUsed = 0;
+  let usedFilter = context.filter;
+  let finalChunks = chunks;
+  let finalMetadatas = context.metadatas;
 
   if (!chunks.length) {
-    answer = "I could not find an answer in the textbook.";
+    const collection = await chroma.getCollection({ name: COLLECTION_NAME });
+    const keyword = await keywordSearch({
+      collection,
+      query: question,
+      limit: 5,
+    });
+    if (keyword.chunks.length) {
+      finalChunks = keyword.chunks;
+      finalMetadatas = keyword.metadatas;
+      usedFilter = "keyword";
+    } else {
+      answer = "I could not find an answer in the textbook.";
+    }
   } else {
-    const context = chunks.join("\n\n");
+    const context = finalChunks.join("\n\n");
 
     const prompt = `
 You are a school tutor.
@@ -128,11 +185,63 @@ ${question}
 Answer (simple, clear, student-friendly):
 `;
 
-    const result = await chatModel.generateContent(prompt);
+    const result = await ai.models.generateContent({
+      model: GEMINI_MODEL,
+      contents: prompt,
+    });
 
-    const usage = result.response.usageMetadata || {};
+    const usage = result.usageMetadata || {};
     tokensUsed = usage.totalTokenCount || 0;
-    answer = result.response.text();
+    answer =
+      result.text ||
+      result?.candidates?.[0]?.content?.parts?.map((p) => p.text).join("") ||
+      "";
+  }
+
+  // If model still says "I don't know", try keyword context (if not already)
+  if (
+    answer &&
+    answer.trim().toLowerCase() === "i don't know" &&
+    usedFilter !== "keyword"
+  ) {
+    const collection = await chroma.getCollection({ name: COLLECTION_NAME });
+    const keyword = await keywordSearch({
+      collection,
+      query: question,
+      limit: 5,
+    });
+    if (keyword.chunks.length) {
+      finalChunks = keyword.chunks;
+      finalMetadatas = keyword.metadatas;
+      usedFilter = "keyword";
+
+      const retryContext = finalChunks.join("\n\n");
+      const retryPrompt = `
+You are a school tutor.
+Answer ONLY using the textbook content below.
+If the answer is not present, say "I don't know".
+
+Textbook content:
+${retryContext}
+
+Question:
+${question}
+
+Answer (simple, clear, student-friendly):
+`;
+
+      const retry = await ai.models.generateContent({
+        model: GEMINI_MODEL,
+        contents: retryPrompt,
+      });
+
+      const usage = retry.usageMetadata || {};
+      tokensUsed = usage.totalTokenCount || tokensUsed;
+      answer =
+        retry.text ||
+        retry?.candidates?.[0]?.content?.parts?.map((p) => p.text).join("") ||
+        answer;
+    }
   }
 
   // 🔹 Log AI usage
@@ -158,8 +267,8 @@ Answer (simple, clear, student-friendly):
 
   return {
     answer,
-    sources,
-    source_type: chunks.length ? "rag" : "none",
-    filters_used: context.filter,
+    sources: formatRagSources(finalMetadatas),
+    source_type: finalChunks.length ? "rag" : "none",
+    filters_used: usedFilter,
   };
 }

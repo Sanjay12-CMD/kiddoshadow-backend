@@ -13,15 +13,16 @@ export function chunkText(text) {
 }
 
 export async function textToSpeech(text) {
-  const { statusCode, body } = await request(TTS_ENDPOINT, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
+  const res = await fetch(TTS_ENDPOINT, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
     body: JSON.stringify({ text }),
   });
 
-  if (statusCode !== 200) {
-    throw new Error(`TTS failed with status ${statusCode}`);
+  if (!res.ok) {
+    throw new Error(`TTS failed with status ${res.status}`);
   }
 
-  return Buffer.from(await body.arrayBuffer());
+  const buf = await res.arrayBuffer();
+  return Buffer.from(buf);
 }

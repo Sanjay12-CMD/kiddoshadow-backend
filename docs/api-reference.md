@@ -504,7 +504,18 @@ Response: `{ "aiType": "string", "result": { "text": "string", "source_type": "r
 AI Analytics
 GET `/api/analytics/ai/school`
 Roles: school_admin, super_admin
+Query (super_admin): `school_id` (optional)
 Response: `[ { total_calls, total_tokens, role } ]`
+
+GET `/api/analytics/ai/school/users`
+Roles: school_admin, super_admin
+Query (super_admin): `school_id` (optional), `role` (optional)
+Response: `[ { user_id, role, total_calls, total_tokens } ]`
+
+GET `/api/analytics/ai/school/classes`
+Roles: school_admin, super_admin
+Query (super_admin): `school_id` (optional)
+Response: `[ { class_id, class_name, total_calls, total_tokens } ]`
 
 GET `/api/analytics/ai/teacher`
 Roles: teacher
@@ -513,6 +524,36 @@ Response: `[ { ai_type, calls, tokens } ]`
 GET `/api/analytics/ai/student`
 Roles: student
 Response: `[ { date, tokens } ]`
+
+AI Tokens & Limits
+Notes:
+- Token unit = LLM tokens reported by Gemini `usageMetadata.totalTokenCount` (prompt + response).
+- Each AI call deducts that token count from the user’s `token_accounts.balance`.
+- Monthly token policy is stored in DB and can be set by super_admin.
+
+GET `/api/tokens/policies`
+Roles: super_admin
+Response: `{ "success": true, "data": [ { role, monthly_tokens, updated_by } ] }`
+
+POST `/api/tokens/policies`
+Roles: super_admin
+Request: `{ "role": "student|teacher", "monthly_tokens": number, "mode"?: "replace|add", "school_id"?: number }`
+Response: `{ "success": true, "message": "Policy updated", "data": { role, monthly_tokens } }`
+
+GET `/api/tokens/accounts`
+Roles: super_admin
+Query: `school_id` (optional), `role` (optional)
+Response: `{ "success": true, "items": [ { user_id, balance, expires_at } ] }`
+
+GET `/api/tokens/transactions`
+Roles: super_admin
+Query: `school_id` (optional), `user_id` (optional)
+Response: `{ "success": true, "items": [ { user_id, type, change, balance_before, balance_after, created_at } ] }`
+
+POST `/api/tokens/users/:userId/adjust`
+Roles: super_admin
+Request: `{ "amount": number, "mode"?: "add|set" }`
+Response: `{ "success": true, "data": { user_id, balance } }`
 
 Audit Logs
 GET `/api/admin/audit-logs`

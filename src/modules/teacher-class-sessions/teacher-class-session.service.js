@@ -9,6 +9,25 @@ import Attendance from "../attendance/attendance.model.js";
 import AppError from "../../shared/appError.js";
 import { Op } from "sequelize";
 
+const MAX_SESSION_MS = 5 * 60 * 60 * 1000; // 5 hours
+
+async function closeStaleSessions({ teacher_id, school_id }) {
+  const cutoff = new Date(Date.now() - MAX_SESSION_MS);
+  const stale = await TeacherClassSession.findAll({
+    where: {
+      teacher_id,
+      school_id,
+      ended_at: null,
+      started_at: { [Op.lt]: cutoff },
+    },
+  });
+
+  for (const s of stale) {
+    s.ended_at = new Date(s.started_at.getTime() + MAX_SESSION_MS);
+    await s.save();
+  }
+}
+
 export async function startSession({
   user,
   school_id,
@@ -52,6 +71,12 @@ export async function startSession({
   if (user.role === "teacher" && assignment.teacher_id !== user.teacher_id) {
     throw new AppError("FORBIDDEN", 403);
   }
+
+  // Auto-close stale sessions (older than 5 hours) so they don't block new starts
+  await closeStaleSessions({
+    teacher_id: assignment.teacher_id,
+    school_id,
+  });
 
   // 3) Prevent restarting a completed slot (same timetable/day)
   if (timetable_id) {
@@ -144,6 +169,12 @@ export async function listSessions({ user, date }) {
     teacher_id: teacherId,
     school_id: user.school_id,
   };
+
+  // Auto-close stale sessions before listing
+  await closeStaleSessions({
+    teacher_id: teacherId,
+    school_id: user.school_id,
+  });
 
   if (date) {
     const start = new Date(date);

@@ -5,7 +5,7 @@ import { z } from "zod";
 ========================= */
 export const requestStudentProfileUpdateSchema = z.object({
   body: z.object({
-    profile_pic: z.string().optional(),
+    avatar_url: z.string().optional().or(z.literal("")).or(z.null()),
     dob: z.string().optional(),
     gender: z.enum(["male", "female", "other"]).optional(),
     father_name: z.string().optional(),

@@ -7,6 +7,7 @@ import {
   createMultiplayerQuiz,
   getLeaderboard,
   joinMultiplayerQuiz,
+  getQuizHistory,
 } from "./game.controller.js";
 
 const router = express.Router();
@@ -35,6 +36,12 @@ router.get(
   "/quiz/:sessionId/leaderboard",
   allowRoles("student", "teacher"),
   getLeaderboard
+);
+
+router.get(
+  "/quiz/history",
+  allowRoles("student", "teacher"),
+  getQuizHistory
 );
 
 router.post(

@@ -102,15 +102,15 @@ export function initGameSocket(io) {
      * JOIN QUIZ ROOM
      */
     socket.on("quiz:join", async ({ sessionId }) => {
-      // 1️⃣ HOST / TEACHER CHECK
-      // If user is the creator of the session, let them in without a player record
+      // 1️⃣ HOST CHECK
       const session = await GameSession.findByPk(sessionId);
 
-      if (session && session.host_user_id === socket.user.id) {
+      // Teacher host joins as observer only (no player record)
+      if (session && session.host_user_id === socket.user.id && socket.user.role === "teacher") {
         socket.join(`quiz:${sessionId}`);
         socket.emit("quiz:joined", {
           sessionId,
-          playerId: null, // Teacher is not a player
+          playerId: null,
           status: session.status,
           isHost: true
         });
@@ -130,8 +130,8 @@ export function initGameSocket(io) {
         return;
       }
 
-      // 2️⃣ STUDENT / PLAYER CHECK
-      const player = await GameSessionPlayer.findOne({
+      // 2️⃣ STUDENT / PLAYER CHECK (includes student host)
+      let player = await GameSessionPlayer.findOne({
         where: {
           session_id: sessionId,
           user_id: socket.user.id,
@@ -139,8 +139,12 @@ export function initGameSocket(io) {
       });
 
       if (!player) {
-        socket.emit("quiz:error", { message: "Not registered for this quiz" });
-        return;
+        player = await GameSessionPlayer.create({
+          session_id: sessionId,
+          user_id: socket.user.id,
+          is_host: session?.host_user_id === socket.user.id,
+          status: "JOINED",
+        });
       }
 
       // Prevent multi-join
@@ -352,6 +356,41 @@ export function initGameSocket(io) {
         questionId,
         isCorrect,
       });
+
+      // If all active players answered this question, advance immediately
+      try {
+        const state = sessionState.get(sessionId);
+        if (state && state.questions?.[state.currentIndex]?.id == questionId) {
+          const activePlayers = await GameSessionPlayer.findAll({
+            where: {
+              session_id: sessionId,
+              status: { [Op.notIn]: ["FINISHED", "DISCONNECTED"] },
+            },
+            attributes: ["id"],
+          });
+          const activeIds = activePlayers.map((p) => p.id);
+
+          if (activeIds.length > 0) {
+            const answeredCount = await PlayerAnswer.count({
+              where: {
+                question_id: questionId,
+                session_player_id: { [Op.in]: activeIds },
+              },
+            });
+
+            if (answeredCount >= activeIds.length) {
+              if (state.timerId) {
+                clearTimeout(state.timerId);
+              }
+              state.currentIndex += 1;
+              sessionState.set(sessionId, state);
+              emitQuestion(sessionId);
+            }
+          }
+        }
+      } catch {
+        // ignore early-advance errors
+      }
     });
 
 

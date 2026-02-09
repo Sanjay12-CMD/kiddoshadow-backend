@@ -11,26 +11,51 @@ const Homework = db.define("homework", {
   school_id: {
     type: DataTypes.BIGINT,
     allowNull: false,
+    references: {
+      model: "schools",
+      key: "id",
+    },
+    onDelete: "CASCADE",
   },
 
   class_id: {
     type: DataTypes.BIGINT,
     allowNull: false,
+    references: {
+      model: "classes",
+      key: "id",
+    },
+    onDelete: "CASCADE",
   },
 
   section_id: {
     type: DataTypes.BIGINT,
     allowNull: false,
+    references: {
+      model: "sections",
+      key: "id",
+    },
+    onDelete: "CASCADE",
   },
 
   teacher_assignment_id: {
     type: DataTypes.BIGINT,
     allowNull: false,
+    references: {
+      model: "teacher_assignments",
+      key: "id",
+    },
+    onDelete: "CASCADE",
   },
 
   subject_id: {
     type: DataTypes.BIGINT,
     allowNull: false, // derived from assignment
+    references: {
+      model: "subjects",
+      key: "id",
+    },
+    onDelete: "CASCADE",
   },
 
   homework_date: {
@@ -46,6 +71,11 @@ const Homework = db.define("homework", {
   created_by: {
     type: DataTypes.BIGINT, // user_id
     allowNull: false,
+    references: {
+      model: "users",
+      key: "id",
+    },
+    onDelete: "CASCADE",
   },
 }, {
   tableName: "homeworks",

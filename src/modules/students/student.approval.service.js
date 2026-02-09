@@ -1,5 +1,6 @@
 import db from "../../config/db.js";
 import Student from "./student.model.js";
+import User from "../users/user.model.js";
 import AppError from "../../shared/appError.js";
 import { logApprovalAction } from "../../shared/utils/auditLogger.js";
 
@@ -20,8 +21,17 @@ export const requestStudentProfileUpdateService = async (
     throw new AppError("Profile update already pending approval", 409);
   }
 
+  const { avatar_url, ...studentUpdates } = updates || {};
+
+  if (avatar_url !== undefined) {
+    await User.update(
+      { avatar_url: avatar_url || null },
+      { where: { id: user_id } }
+    );
+  }
+
   await student.update({
-    ...updates,
+    ...studentUpdates,
     approval_status: "pending",
     approved_by: null,
     approved_at: null,

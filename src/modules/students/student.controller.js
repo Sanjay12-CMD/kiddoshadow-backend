@@ -76,6 +76,7 @@ export const completeStudentProfile = asyncHandler(async (req, res) => {
     mother_occupation,
     address,
     family_income,
+    avatar_url,
   } = req.body;
 
   const student = await Student.findOne({
@@ -83,12 +84,34 @@ export const completeStudentProfile = asyncHandler(async (req, res) => {
   });
   if (!student) throw new AppError("Student profile not found", 404);
 
-  await User.update(
-    { name, phone, email: req.body.email, first_login: false },
-    { where: { id: req.user.id } }
-  );
+  if (req.body.email) {
+    const existing = await User.findOne({ where: { email: req.body.email } });
+    if (existing && existing.id !== req.user.id) {
+      throw new AppError("Email already in use", 400);
+    }
+  }
 
-  await student.update({
+  if (phone) {
+    const existingPhone = await User.findOne({ where: { phone } });
+    if (existingPhone && existingPhone.id !== req.user.id) {
+      throw new AppError("Phone already in use", 400);
+    }
+  }
+
+  const userUpdates = {};
+  if (name !== undefined) userUpdates.name = name;
+  if (phone !== undefined) userUpdates.phone = phone;
+  if (req.body.email !== undefined) userUpdates.email = req.body.email;
+  if (avatar_url !== undefined) userUpdates.avatar_url = avatar_url || null;
+  if (req.user.first_login && name !== undefined) {
+    userUpdates.first_login = false;
+  }
+
+  if (Object.keys(userUpdates).length > 0) {
+    await User.update(userUpdates, { where: { id: req.user.id } });
+  }
+
+  const studentUpdates = {
     dob,
     gender,
     blood_group,
@@ -99,7 +122,13 @@ export const completeStudentProfile = asyncHandler(async (req, res) => {
     mother_occupation,
     address,
     family_income,
-  });
+    approval_status: "pending",
+    approved_by: null,
+    approved_at: null,
+    rejection_reason: null,
+  };
+
+  await student.update(studentUpdates);
 
   /* Create new token */
   const token = jwt.sign(
@@ -120,11 +149,17 @@ export const completeStudentProfile = asyncHandler(async (req, res) => {
 export const getMyProfile = asyncHandler(async (req, res) => {
   const student = await Student.findOne({
     where: { user_id: req.user.id },
-    include: ["class", "section"],
+    include: [User, "class", "section"],
   });
   if (!student) throw new AppError("Student profile not found", 404);
 
-  res.json(student);
+  const data = student.get({ plain: true });
+  const user = data.user || {};
+  res.json({
+    ...data,
+    ...user,
+    avatar_url: user.avatar_url || "",
+  });
 });
 
 

@@ -150,6 +150,16 @@ export const updateParentProfileService = async (user_id, data) => {
   }
 
   await user.update(data);
+
+  const parent = await Parent.findOne({ where: { user_id } });
+  if (parent) {
+    await parent.update({
+      approval_status: "pending",
+      approved_by: null,
+      approved_at: null,
+      rejection_reason: null,
+    });
+  }
   return user;
 };
 

@@ -42,6 +42,7 @@ import VoiceLog from "../modules/voice-logs/voice-log.model.js";
 import Subscription from "../modules/subscriptions/subscription.model.js";
 import TokenAccount from "../modules/tokens/token-account.model.js";
 import TokenTransaction from "../modules/tokens/token-transaction.model.js";
+import TokenPolicy from "../modules/tokens/token-policy.model.js";
 
 /* ===================== REPORT CARDS ===================== */
 import Exam from "../modules/report-cards/exam.model.js";
@@ -233,6 +234,7 @@ const initAssociations = () => {
   Subscription.belongsTo(School, { foreignKey: "school_id" });
   TokenAccount.belongsTo(User, { foreignKey: "user_id" });
   TokenTransaction.belongsTo(User, { foreignKey: "user_id" });
+  TokenPolicy.belongsTo(User, { foreignKey: "updated_by" });
 
   /* ==================== NOTIFICATIONS ==================== */
   Notification.belongsTo(User, { foreignKey: "sender_user_id" });

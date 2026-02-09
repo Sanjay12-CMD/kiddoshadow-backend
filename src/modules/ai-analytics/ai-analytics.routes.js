@@ -3,6 +3,8 @@ import { protect } from "../../shared/middlewares/auth.js";
 import { allowRoles } from "../../shared/middlewares/role.js";
 import {
   schoolAiAnalytics,
+  schoolUserUsage,
+  schoolClassUsage,
   teacherAiAnalytics,
   studentAiAnalytics,
 } from "./ai-analytics.controller.js";
@@ -15,6 +17,22 @@ router.get(
   protect,
   allowRoles("school_admin", "super_admin"),
   schoolAiAnalytics
+);
+
+// school admin / super admin: per user usage
+router.get(
+  "/analytics/ai/school/users",
+  protect,
+  allowRoles("school_admin", "super_admin"),
+  schoolUserUsage
+);
+
+// school admin / super admin: per class usage (students)
+router.get(
+  "/analytics/ai/school/classes",
+  protect,
+  allowRoles("school_admin", "super_admin"),
+  schoolClassUsage
 );
 
 // teacher

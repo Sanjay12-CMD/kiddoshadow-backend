@@ -191,9 +191,6 @@ export const processApprovalAction = async ({
 
   // 1. Validate Action
   const status = action === "approve" ? "approved" : "rejected";
-  if (action === "reject" && !rejection_reason) {
-    throw new AppError("Rejection reason is required", 400);
-  }
 
   // 2. Determine Target Model
   let Model;
@@ -244,7 +241,7 @@ export const processApprovalAction = async ({
     approval_status: status,
     approved_by: user.id,
     approved_at: new Date(),
-    rejection_reason: action === "reject" ? rejection_reason : null
+    rejection_reason: action === "reject" ? (rejection_reason || null) : null
   });
 
   return entity;

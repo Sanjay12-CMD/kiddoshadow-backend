@@ -7,6 +7,7 @@ import Class from "../classes/classes.model.js";
 import TeacherAssignment from "../teacher-assignments/teacher-assignment.model.js";
 import Subject from "../subjects/subject.model.js";
 import User from "../users/user.model.js";
+import Teacher from "../teachers/teacher.model.js";
 import AppError from "../../shared/appError.js";
 
 /* =====================================================
@@ -131,6 +132,11 @@ export const getSectionTimetableService = async ({
             model: Subject,
             attributes: ["id", "name"],
           },
+          {
+            model: Teacher,
+            attributes: ["id"],
+            include: [{ model: User, attributes: ["name"] }],
+          },
         ],
         attributes: ["id", "teacher_id", "subject_id"],
       },
@@ -160,6 +166,9 @@ export const getSectionTimetableService = async ({
       teacher_id: row.teacher_assignment?.teacher_id ?? null,
       subject_id: row.teacher_assignment?.subject_id ?? null,
       subject: row.is_break ? null : row.teacher_assignment?.subject,
+      teacher: row.teacher_assignment?.teacher?.user
+        ? { id: row.teacher_assignment.teacher.id, name: row.teacher_assignment.teacher.user.name }
+        : null,
     });
   }
 

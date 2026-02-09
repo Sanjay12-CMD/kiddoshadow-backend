@@ -23,7 +23,6 @@ export const markAttendanceService = async ({
     where: {
       id: teacher_class_session_id,
       school_id,
-      ended_at: null,
     },
   });
 

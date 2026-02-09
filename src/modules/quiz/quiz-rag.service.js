@@ -1,12 +1,11 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenAI } from "@google/genai";
 import { buildQuizPrompt } from "./quiz-rag.prompts.js";
 import Quiz from "./quiz.model.js";
 import QuizQuestion from "./quiz-question.model.js";
 import AppError from "../../shared/appError.js";
 
-const GEMINI_MODEL = process.env.GEMINI_MODEL ;
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const chatModel = genAI.getGenerativeModel({ model: GEMINI_MODEL });
+const GEMINI_MODEL = (process.env.GEMINI_MODEL || "gemini-2.5-flash-lite").replace(/^models\//, "");
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 function extractJson(text) {
   const cleaned = text.replace(/```json|```/g, "").trim();
@@ -37,8 +36,14 @@ export async function generateQuizFromAi({
     numQuestions: safeNumQuestions,
   });
 
-  const result = await chatModel.generateContent(prompt);
-  const text = result.response.text();
+  const result = await ai.models.generateContent({
+    model: GEMINI_MODEL,
+    contents: prompt,
+  });
+  const text =
+    result.text ||
+    result?.candidates?.[0]?.content?.parts?.map((p) => p.text).join("") ||
+    "";
 
   let parsed;
   try {

@@ -72,6 +72,11 @@ const User = db.define(
       allowNull: true,
     },
 
+    avatar_url: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+
     last_login: {
       type: DataTypes.DATE,
       allowNull: true,

@@ -32,6 +32,11 @@ router.get("/", allowRoles("school_admin"), listAssignments);
 
 /* TEACHER/ADMIN: GET TEACHER'S ASSIGNMENTS */
 router.get(
+  "/teacher/me",
+  allowRoles("teacher"),
+  getTeacherAssignments
+);
+router.get(
   "/teacher/:teacherId",
   allowRoles("school_admin", "teacher"),
   getTeacherAssignments

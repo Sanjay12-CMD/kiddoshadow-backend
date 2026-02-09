@@ -80,6 +80,21 @@ export const listNotifications = asyncHandler(async (req, res) => {
         ...plain,
         is_acknowledged: Boolean(ack),
         acknowledged_at: ack?.acknowledged_at || null,
+        sender: plain.User
+          ? {
+              id: plain.User.id,
+              name: plain.User.name,
+              avatar_url: plain.User.avatar_url,
+              role: plain.User.role,
+            }
+          : null,
+        school: plain.School
+          ? {
+              id: plain.School.id,
+              school_name: plain.School.school_name,
+              logo_url: plain.School.logo_url,
+            }
+          : null,
       };
     }),
   });

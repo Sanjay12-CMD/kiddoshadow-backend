@@ -1,10 +1,10 @@
 import { z } from "zod";
 
 export const markAttendanceSchema = z.object({
-  teacher_class_session_id: z.number().int().positive(),
+  teacher_class_session_id: z.coerce.number().int().positive(),
   records: z.array(
     z.object({
-      student_id: z.number().int().positive(),
+      student_id: z.coerce.number().int().positive(),
       status: z.enum(["present", "absent", "leave", "on_duty"]),
     })
   ).min(1),

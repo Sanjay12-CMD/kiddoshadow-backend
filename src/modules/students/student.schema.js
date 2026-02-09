@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+const emptyToUndefined = (val) => (val === "" ? undefined : val);
+
 /* admin: create student */
 export const createStudentSchema = z.object({
   class_id: z.number().int().positive(),
@@ -8,9 +10,9 @@ export const createStudentSchema = z.object({
 
 /* student: first login */
 export const completeStudentProfileSchema = z.object({
-  name: z.string().min(1),
-  phone: z.string().optional(),
-  email: z.string().email().optional(),
+  name: z.string().min(1).optional(),
+  phone: z.preprocess(emptyToUndefined, z.string().optional()),
+  email: z.preprocess(emptyToUndefined, z.string().email().optional()),
   dob: z.string().optional(), // or z.coerce.date()
   gender: z.enum(["male", "female", "other"]).optional(),
   blood_group: z.string().optional(),
@@ -20,7 +22,8 @@ export const completeStudentProfileSchema = z.object({
   father_occupation: z.string().optional(),
   mother_occupation: z.string().optional(),
   address: z.string().optional(),
-  family_income: z.coerce.number().optional(),
+  family_income: z.preprocess(emptyToUndefined, z.coerce.number().optional()),
+  avatar_url: z.string().optional().or(z.literal("")).or(z.null()),
 });
 
 /* admin: move */

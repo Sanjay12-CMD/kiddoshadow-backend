@@ -1,17 +1,12 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenAI } from "@google/genai";
 import AppError from "../../shared/appError.js";
 import AiChatLog from "../ai-chat-logs/ai-chat-log.model.js";
 import { deductTokens } from "../tokens/token.service.js";
 import { PROMPTS } from "./teacher-ai.prompts.js";
 import { retrieveRagContext, formatRagSources } from "../rag/rag.service.js";
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-
-const GEMINI_MODEL = process.env.GEMINI_MODEL ;
-
-const chatModel = genAI.getGenerativeModel({
-  model: GEMINI_MODEL,
-});
+const GEMINI_MODEL = (process.env.GEMINI_MODEL || "gemini-2.5-flash-lite").replace(/^models\//, "");
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 export async function runTeacherAI({ user, aiType, payload }) {
   // 🔒 Role check (extra safety, even though route already restricts)
@@ -29,10 +24,11 @@ export async function runTeacherAI({ user, aiType, payload }) {
   const safePayload = { subject: "General", ...payload };
   let prompt = promptBuilder(safePayload);
 
-  // 🔍 Optional RAG context (for lesson summary / question paper / homework / quiz)
+  // 🔍 Optional RAG context
   let sourceType = "gemini";
   let sources = [];
   let filtersUsed = null;
+  const requireRag = new Set(["lesson_summary", "question_paper"]);
 
   const ragQuery = payload?.topic || payload?.chapter;
   const hasScope = payload?.classLevel;
@@ -51,7 +47,7 @@ export async function runTeacherAI({ user, aiType, payload }) {
       prompt = `
 ${prompt}
 
-Use the textbook context below first. If it is insufficient, you may add general knowledge.
+Use ONLY the textbook context below. If it is insufficient, say "I don't know."
 
 Textbook context:
 ${ragText}
@@ -59,15 +55,36 @@ ${ragText}
 
       sourceType = "rag";
       sources = formatRagSources(context.metadatas);
+    } else if (requireRag.has(aiType)) {
+      // Strict RAG-only for lesson summary & question paper
+      return {
+        text: "I don't know.",
+        source_type: "none",
+        sources: [],
+        filters_used: filtersUsed,
+      };
     }
+  } else if (requireRag.has(aiType)) {
+    return {
+      text: "I don't know.",
+      source_type: "none",
+      sources: [],
+      filters_used: null,
+    };
   }
 
   // 🤖 Call Gemini
-  const result = await chatModel.generateContent(prompt);
+  const result = await ai.models.generateContent({
+    model: GEMINI_MODEL,
+    contents: prompt,
+  });
 
-  const usage = result.response.usageMetadata || {};
+  const usage = result.usageMetadata || {};
   const tokensUsed = usage.totalTokenCount || 0;
-  const output = result.response.text();
+  const output =
+    result.text ||
+    result?.candidates?.[0]?.content?.parts?.map((p) => p.text).join("") ||
+    "";
 
   // 📝 Log AI usage
   const log = await AiChatLog.create({

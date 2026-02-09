@@ -67,6 +67,7 @@ export const completeTeacherProfile = asyncHandler(async (req, res) => {
     designation,
     qualification,
     experience,
+    avatar_url,
   } = req.body;
 
   const teacher = await Teacher.findOne({
@@ -77,19 +78,51 @@ export const completeTeacherProfile = asyncHandler(async (req, res) => {
     throw new AppError("Teacher profile not found", 404);
   }
 
+  if (email) {
+    const existing = await User.findOne({ where: { email } });
+    if (existing && existing.id !== req.user.id) {
+      throw new AppError("Email already in use", 400);
+    }
+  }
+
+  if (phone) {
+    const existingPhone = await User.findOne({ where: { phone } });
+    if (existingPhone && existingPhone.id !== req.user.id) {
+      throw new AppError("Phone already in use", 400);
+    }
+  }
+
   // Update User details
-  const user = await User.update(
-    { name, phone, email, first_login: false },
-    { where: { id: req.user.id }, returning: true, plain: true }
-  ).then(() => User.findByPk(req.user.id)); // Fetch updated user for token
+  const userUpdates = {};
+  if (name !== undefined) userUpdates.name = name;
+  if (phone !== undefined) userUpdates.phone = phone;
+  if (email !== undefined) userUpdates.email = email;
+  if (avatar_url !== undefined) userUpdates.avatar_url = avatar_url || null;
+  if (req.user.first_login && name !== undefined) {
+    userUpdates.first_login = false;
+  }
+
+  if (Object.keys(userUpdates).length > 0) {
+    await User.update(userUpdates, { where: { id: req.user.id } });
+  }
+
+  const user = await User.findByPk(req.user.id); // Fetch updated user for token
 
   // Update Teacher details
-  await teacher.update({
+  const teacherUpdates = {
     gender,
     designation,
     qualification,
     experience,
-  });
+    approval_status: "pending",
+    approved_by: null,
+    approved_at: null,
+    rejection_reason: null,
+  };
+
+  if (Object.keys(teacherUpdates).length > 0) {
+    await teacher.update(teacherUpdates);
+  }
 
   /* Create new token */
   const token = jwt.sign(
@@ -117,5 +150,11 @@ export const getMyProfile = asyncHandler(async (req, res) => {
     throw new AppError("Teacher profile not found", 404);
   }
 
-  res.json(teacher);
+  const data = teacher.get({ plain: true });
+  const user = data.user || data.User || {};
+  res.json({
+    ...data,
+    ...user,
+    avatar_url: user.avatar_url || "",
+  });
 });

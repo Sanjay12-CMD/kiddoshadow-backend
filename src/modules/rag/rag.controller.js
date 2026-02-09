@@ -67,3 +67,28 @@ export const askQuestion = asyncHandler(async (req, res) => {
 
   res.end();
 });
+
+export const speakText = asyncHandler(async (req, res) => {
+  const { text } = req.body;
+
+  if (!text || !String(text).trim()) {
+    return res.status(400).json({ message: "Text is required" });
+  }
+
+  res.setHeader("Content-Type", "audio/wav");
+  res.setHeader("Transfer-Encoding", "chunked");
+
+  const sentences = chunkText(String(text));
+
+  for (const sentence of sentences) {
+    try {
+      const wavBuffer = await textToSpeech(sentence);
+      res.write(wavBuffer);
+    } catch (err) {
+      console.error("TTS failed:", err.message);
+      break;
+    }
+  }
+
+  res.end();
+});

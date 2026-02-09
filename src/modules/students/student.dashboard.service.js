@@ -1,9 +1,13 @@
 import Student from "./student.model.js";
 import Attendance from "../attendance/attendance.model.js";
-// import Homework from "../homework/homework.model.js"; // Verify if available
+import Homework from "../homework/homework.model.js";
 // import Notification from "../notifications/notification.model.js"; // Verify if available
 import AppError from "../../shared/appError.js";
 import User from "../users/user.model.js";
+import { Op } from "sequelize";
+import TokenAccount from "../tokens/token-account.model.js";
+import { ensureTokenAccount } from "../tokens/token.service.js";
+import AiChatLog from "../ai-chat-logs/ai-chat-log.model.js";
 
 export const getStudentDashboardService = async ({ student_user_id }) => {
     const student = await Student.findOne({
@@ -26,11 +30,34 @@ export const getStudentDashboardService = async ({ student_user_id }) => {
     });
     const attendancePercentage = totalDays > 0 ? Math.round((presentDays / totalDays) * 100) : 0;
 
-    // 2. AI Tokens (Mock for now, or fetch if available)
+    const today = new Date();
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+
+    const pendingHomeworkCount = await Homework.count({
+        where: {
+            school_id: student.school_id,
+            class_id: student.class_id,
+            section_id: student.section_id,
+            homework_date: { [Op.gte]: todayStr },
+        },
+    });
+
+    // 2. AI Tokens (real)
+    await ensureTokenAccount(student_user_id);
+    const tokenAccount = await TokenAccount.findOne({
+        where: { user_id: student_user_id },
+        attributes: ["balance"],
+    });
+    const remaining = tokenAccount?.balance ?? 0;
+    const usedTotal = await AiChatLog.sum("tokens_used", {
+        where: { user_id: student_user_id },
+    });
+    const used = usedTotal || 0;
+    const total = used + remaining;
     const aiTokens = {
-        total: 1000,
-        used: 150,
-        remaining: 850
+        total,
+        used,
+        remaining
     };
 
     return {
@@ -48,7 +75,7 @@ export const getStudentDashboardService = async ({ student_user_id }) => {
                 percentage: attendancePercentage
             },
             ai_tokens: aiTokens,
-            homework_pending: 0, // Placeholder until homework model integrated
+            homework_pending: pendingHomeworkCount,
             unread_notifications: 0 // Placeholder
         }
     };

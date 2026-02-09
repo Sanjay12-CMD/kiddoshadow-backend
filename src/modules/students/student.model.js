@@ -56,8 +56,6 @@ const Student = db.define(
       allowNull: false,
     },
 
-    profile_pic: DataTypes.TEXT,
-
     dob: DataTypes.DATEONLY,
 
     gender: {

@@ -1,15 +1,41 @@
 import asyncHandler from "../../shared/asyncHandler.js";
 import {
   getSchoolAnalytics,
+  getSchoolUserUsage,
+  getSchoolClassUsage,
   getTeacherAnalytics,
   getStudentDailyUsage,
 } from "./ai-analytics.service.js";
 
 /* ===================== SCHOOL ===================== */
 export const schoolAiAnalytics = asyncHandler(async (req, res) => {
-  const schoolId = req.user.school_id;
+  const schoolId =
+    req.user.role === "super_admin" && req.query.school_id
+      ? Number(req.query.school_id)
+      : req.user.school_id;
 
   const data = await getSchoolAnalytics(schoolId);
+  res.json(data);
+});
+
+export const schoolUserUsage = asyncHandler(async (req, res) => {
+  const schoolId =
+    req.user.role === "super_admin" && req.query.school_id
+      ? Number(req.query.school_id)
+      : req.user.school_id;
+  const role = req.query.role || "student";
+
+  const data = await getSchoolUserUsage(schoolId, role);
+  res.json(data);
+});
+
+export const schoolClassUsage = asyncHandler(async (req, res) => {
+  const schoolId =
+    req.user.role === "super_admin" && req.query.school_id
+      ? Number(req.query.school_id)
+      : req.user.school_id;
+
+  const data = await getSchoolClassUsage(schoolId);
   res.json(data);
 });
 
