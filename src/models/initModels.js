@@ -52,6 +52,7 @@ import ReportCardMark from "../modules/report-cards/report-card-mark.model.js";
 /* ===================== MISC ===================== */
 import Notification from "../modules/notifications/notification.model.js";
 import NotificationAck from "../modules/notifications/notification-ack.model.js";
+import PaymentLog from "../modules/payment-logs/payment-log.model.js";
 
 /* ===================== GROUP CHAT ===================== */
 import GroupChat from "../modules/group-chat/group-chat.model.js";
@@ -67,9 +68,11 @@ const initAssociations = () => {
   School.hasMany(Teacher, { foreignKey: "school_id" });
   School.hasMany(Student, { foreignKey: "school_id" });
   School.hasMany(Section, { foreignKey: "school_id" });
+  School.hasMany(PaymentLog, { foreignKey: "school_id" });
 
   User.belongsTo(School, { foreignKey: "school_id" });
   Section.belongsTo(School, { foreignKey: "school_id" });
+  PaymentLog.belongsTo(School, { foreignKey: "school_id" });
 
   /* ==================== USER PROFILES ==================== */
   User.hasOne(Student, { foreignKey: "user_id" });
@@ -88,9 +91,15 @@ const initAssociations = () => {
     onDelete: "SET NULL",
   });
   Student.belongsTo(Section, { foreignKey: "section_id" });
+  Student.hasMany(PaymentLog, { foreignKey: "student_id" });
+  PaymentLog.belongsTo(Student, { foreignKey: "student_id" });
 
   Class.hasMany(Student, { foreignKey: "class_id" });
+  Class.hasMany(PaymentLog, { foreignKey: "class_id" });
+  PaymentLog.belongsTo(Class, { foreignKey: "class_id" });
   Section.hasMany(Student, { foreignKey: "section_id" });
+  Section.hasMany(PaymentLog, { foreignKey: "section_id" });
+  PaymentLog.belongsTo(Section, { foreignKey: "section_id" });
 
   Student.hasMany(Attendance, { foreignKey: "student_id" });
 

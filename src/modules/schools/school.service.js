@@ -9,12 +9,16 @@ import { getPagination } from "../../shared/utils/pagination.js";
 export const createSchoolService = async ({
   name,
   code,
+  school_type,
   cbse_affiliation_no,
   address,
   city,
   state,
   zip,
   email,
+  payment_mode,
+  reference_name,
+  reference_percentage,
   admin_username,
   admin_password,
 }) => {
@@ -25,16 +29,30 @@ export const createSchoolService = async ({
   if (exists) {
     throw new AppError("School code already exists", 409);
   }
+  if (school_type === "cbse" && !cbse_affiliation_no) {
+    throw new AppError(
+      "CBSE affiliation number is required for CBSE schools",
+      400
+    );
+  }
+
+  if (school_type === "state") {
+    cbse_affiliation_no = null;
+  }
 
   const school = await School.create({
     school_name: name,
     school_code: code,
+    school_type,
     cbse_affiliation_no,
     address,
     city,
     state,
     zip,
     email,
+    payment_mode,
+    reference_name,
+    reference_percentage,
     status: "pending",
   });
 
@@ -67,18 +85,40 @@ if (existingUser) {
 ========================= */
 export const listSchoolsService = async ({ query }) => {
   const { limit, offset } = getPagination(query);
-  return School.findAndCountAll({
+  const result = await School.findAndCountAll({
     limit,
     offset,
-    include: [
-      {
-        model: User,
-        where: { role: "school_admin" },
-        required: false,
-        attributes: ["id", "username", "is_active", "first_login"],
-      },
-    ],
+    order: [["id", "ASC"]],
   });
+
+  const schoolIds = result.rows.map((s) => s.id);
+  let admins = [];
+
+  if (schoolIds.length) {
+    admins = await User.findAll({
+      where: { role: "school_admin", school_id: schoolIds },
+      attributes: ["id", "school_id", "username", "is_active", "first_login"],
+      order: [["school_id", "ASC"], ["id", "ASC"]],
+    });
+  }
+
+  const adminMap = new Map();
+  for (const admin of admins) {
+    const key = String(admin.school_id);
+    if (!adminMap.has(key)) adminMap.set(key, []);
+    adminMap.get(key).push(admin);
+  }
+
+  const rows = result.rows.map((school) => {
+    const plain = school.get({ plain: true });
+    plain.users = adminMap.get(String(school.id)) || [];
+    return plain;
+  });
+
+  return {
+    count: result.count,
+    rows,
+  };
 };
 
 /* =========================
@@ -135,4 +175,28 @@ export const resetSchoolAdminPasswordService = async ({
   await admin.save();
 
   return { username: admin.username };
+};
+
+/* =========================
+   SCHOOL DETAILS
+========================= */
+export const getSchoolDetailsService = async ({ requester, school_id }) => {
+  const requestedId = Number(school_id);
+  if (!Number.isFinite(requestedId)) {
+    throw new AppError("Invalid school id", 400);
+  }
+
+  if (
+    requester.role === "school_admin" &&
+    String(requester.school_id) !== String(requestedId)
+  ) {
+    throw new AppError("Forbidden", 403);
+  }
+
+  const school = await School.findByPk(requestedId);
+  if (!school) {
+    throw new AppError("School not found", 404);
+  }
+
+  return school;
 };

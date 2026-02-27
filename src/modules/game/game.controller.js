@@ -16,6 +16,12 @@ function generateRoomCode(length = 6) {
 
 export const submitSinglePlayerQuiz = asyncHandler(async (req, res) => {
   const { playerId, answers } = req.body;
+  if (!playerId) {
+    throw new AppError("playerId is required", 400);
+  }
+  if (!Array.isArray(answers) || answers.length === 0) {
+    throw new AppError("answers must be a non-empty array", 400);
+  }
 
   const player = await GameSessionPlayer.findByPk(playerId, {
     include: [{ model: GameSession }],
@@ -29,7 +35,18 @@ export const submitSinglePlayerQuiz = asyncHandler(async (req, res) => {
     throw new AppError("Quiz already submitted", 409);
   }
 
-  const session = player.GameSession;
+  if (String(player.user_id) !== String(req.user.id)) {
+    throw new AppError("Forbidden", 403);
+  }
+
+  const session =
+    player.GameSession ||
+    player.game_session ||
+    (await GameSession.findByPk(player.session_id));
+
+  if (!session) {
+    throw new AppError("Session not found", 404);
+  }
 
   // ⬅️ AUTHORITATIVE TIME CHECK
   if (isTimeOver(session)) {
@@ -44,6 +61,9 @@ export const submitSinglePlayerQuiz = asyncHandler(async (req, res) => {
   await db.transaction(async (t) => {
     for (const ans of answers) {
       const question = await QuizQuestion.findByPk(ans.questionId, { transaction: t });
+      if (!question || String(question.quiz_id) !== String(session.quiz_id)) {
+        throw new AppError(`Invalid question for this quiz: ${ans.questionId}`, 400);
+      }
 
       const isCorrect =
         question.correct_option_index === ans.selectedIndex;
@@ -76,12 +96,23 @@ export const submitSinglePlayerQuiz = asyncHandler(async (req, res) => {
 
 export const startSinglePlayerQuiz = asyncHandler(async (req, res) => {
   const { quizId, timeLimitMinutes } = req.body;
+  const parsedQuizId = Number(quizId);
+  const safeMinutes = Number(timeLimitMinutes) > 0 ? Number(timeLimitMinutes) : 5;
+
+  if (!Number.isInteger(parsedQuizId) || parsedQuizId <= 0) {
+    throw new AppError("Valid quizId is required", 400);
+  }
+
+  const quiz = await Quiz.findByPk(parsedQuizId);
+  if (!quiz) {
+    throw new AppError("Quiz not found", 404);
+  }
 
   const session = await GameSession.create({
-    quiz_id: quizId,
+    quiz_id: parsedQuizId,
     mode: "SINGLE",
     host_user_id: req.user.id,
-    total_time_ms: timeLimitMinutes * 60 * 1000,
+    total_time_ms: safeMinutes * 60 * 1000,
     status: "IN_PROGRESS",
     started_at: new Date(),
   });
@@ -108,6 +139,10 @@ export const createMultiplayerQuiz = asyncHandler(async (req, res) => {
 
   if (!topic) {
     throw new AppError("Topic required", 400);
+  }
+
+  if (!req.user?.id) {
+    throw new AppError("Valid user required to create multiplayer session", 400);
   }
 
   const quizResult = await generateQuizFromAi({
@@ -172,12 +207,15 @@ export const getLeaderboard = asyncHandler(async (req, res) => {
 });
 
 export const joinMultiplayerQuiz = asyncHandler(async (req, res) => {
-  const { roomCode } = req.body;
+  const { roomCode, sessionId } = req.body;
   const normalizedCode = roomCode ? String(roomCode).toUpperCase() : "";
+  const parsedSessionId = Number(sessionId);
 
-  const session = await GameSession.findOne({
-    where: { room_code: normalizedCode },
-  });
+  const session = Number.isInteger(parsedSessionId) && parsedSessionId > 0
+    ? await GameSession.findByPk(parsedSessionId)
+    : await GameSession.findOne({
+        where: { room_code: normalizedCode },
+      });
 
   if (!session) {
     throw new AppError("Room not found", 404);

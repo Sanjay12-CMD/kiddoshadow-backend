@@ -2,6 +2,7 @@ import asyncHandler from "../../shared/asyncHandler.js";
 import AppError from "../../shared/appError.js";
 import TeacherAssignment from "./teacher-assignment.model.js";
 import * as service from "./teacher-assignment.service.js";
+import { resolveTeacherId } from "../../shared/utils/resolveTeacherId.js";
 
 /* ADMIN: CREATE ASSIGNMENT */
 export const assignTeacher = asyncHandler(async (req, res) => {
@@ -36,12 +37,11 @@ export const listAssignments = asyncHandler(async (req, res) => {
 
 /* TEACHER/ADMIN: GET TEACHER'S ASSIGNMENTS */
 export const getTeacherAssignments = asyncHandler(async (req, res) => {
-  const teacherId =
-    req.user.role === "teacher"
-      ? req.user.teacher_id
-      : req.params.teacherId;
+  const teacherId = req.user.role === "teacher"
+    ? [await resolveTeacherId(req.user), req.user.id]
+    : req.params.teacherId;
 
-  if (!teacherId) {
+  if (!teacherId || (Array.isArray(teacherId) && !teacherId.some(Boolean))) {
     throw new AppError("teacherId is required", 400);
   }
 

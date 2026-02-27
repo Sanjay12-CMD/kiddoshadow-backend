@@ -10,6 +10,7 @@ import {
 
 import {
   teacherCreateParent,
+  teacherApproveParent,
   approveParent,
 } from "./parent.approval.controller.js";
 
@@ -24,6 +25,14 @@ router.post(
   allowRoles("teacher"),
   validate(teacherCreateParentSchema),
   teacherCreateParent
+);
+
+router.post(
+  "/teachers/parents/:parent_id/approve",
+  protect,
+  allowRoles("teacher"),
+  validate(approveParentSchema),
+  teacherApproveParent
 );
 
 /* =========================

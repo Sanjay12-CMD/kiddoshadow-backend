@@ -1,3 +1,5 @@
+`PORT=9001 PM2_NAME=voice-tts ./deploy.sh`
+
 # Recommended folder structure
 backend/books/
   class6/
@@ -30,8 +32,9 @@ delete rag-data folder for rebuild from scratch
 1) Start the Python TTS server
 
 # cd voice_service
-`python -m venv .venv`
-`. .venv\Scripts\Activate.ps1`
+`py -3.11 -m venv .venv`
+`.venv\Scripts\Activate.bat`
+`python -m pip install -U pip`
 `pip install -r requirements.txt`
 
 # Only if voices/ref.pt is missing or you changed voices/ref.wav

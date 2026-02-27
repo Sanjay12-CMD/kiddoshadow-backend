@@ -6,6 +6,7 @@ import { validate } from "../../shared/middlewares/validate.js";
 import {
   createTeacher,
   listTeachers,
+  listTeachersBySection,
   listTeacherOptions,
   updateTeacherStatus,
   completeTeacherProfile,
@@ -35,6 +36,13 @@ router.post(
   protect,
   allowRoles("school_admin"),
   createTeacher
+);
+
+router.get(
+  "/section/:sectionId",
+  protect,
+  allowRoles("school_admin"),
+  listTeachersBySection
 );
 
 router.get(

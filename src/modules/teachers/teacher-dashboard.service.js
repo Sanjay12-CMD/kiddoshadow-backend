@@ -30,6 +30,7 @@ export const getTeacherDashboardService = async ({
   teacher_id,
   user_id,
 }) => {
+  const teacherIds = Array.isArray(teacher_id) ? teacher_id : [teacher_id];
   const today = getToday();
   const day = getDayName();
 
@@ -37,7 +38,7 @@ export const getTeacherDashboardService = async ({
   const assignments = await TeacherAssignment.findAll({
     where: {
       school_id,
-      teacher_id,
+      teacher_id: teacherIds.filter(Boolean),
       is_active: true,
     },
     attributes: ["class_id", "section_id"],

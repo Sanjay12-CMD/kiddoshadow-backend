@@ -46,31 +46,31 @@ export const listNotificationsForUserService = async ({
   class_ids = [],
   section_ids = [],
 }) => {
-  const roleTargets =
-    user_role === "teacher" ? [user_role, "all"] : [user_role, "all"];
+  const baseWhere = { school_id };
 
-  // Base audience filter
-  const audienceFilter = { target_role: { [Op.in]: roleTargets } };
+  if (user_role !== "school_admin") {
+    const roleTargets = [user_role, "all"];
+    const audienceFilter = { target_role: { [Op.in]: roleTargets } };
 
-  // Teachers should also see notifications they created (even if targeted to students/parents)
-  const audienceOrCreator =
-    user_role === "teacher"
-      ? { [Op.or]: [audienceFilter, { sender_user_id: user_id }] }
-      : audienceFilter;
+    const scopeConditions = [{ class_id: null }];
+    if (class_ids.length) scopeConditions.push({ class_id: { [Op.in]: class_ids } });
+    if (section_ids.length) scopeConditions.push({ section_id: { [Op.in]: section_ids } });
 
-  // Class/section scope
-  const scopeConditions = [{ class_id: null }];
-  if (class_ids.length) scopeConditions.push({ class_id: { [Op.in]: class_ids } });
-  if (section_ids.length) scopeConditions.push({ section_id: { [Op.in]: section_ids } });
+    const scopedAudienceWhere = {
+      [Op.and]: [audienceFilter, { [Op.or]: scopeConditions }],
+    };
+
+    // Teachers should always see notifications they created, even if
+    // class/section scope doesn't match due assignment data gaps.
+    if (user_role === "teacher") {
+      baseWhere[Op.or] = [scopedAudienceWhere, { sender_user_id: user_id }];
+    } else {
+      baseWhere[Op.and] = [audienceFilter, { [Op.or]: scopeConditions }];
+    }
+  }
 
   return Notification.findAndCountAll({
-    where: {
-      school_id,
-      [Op.and]: [
-        audienceOrCreator,
-        { [Op.or]: scopeConditions },
-      ],
-    },
+    where: baseWhere,
     include: [
       {
         model: User,
@@ -87,6 +87,9 @@ export const listNotificationsForUserService = async ({
         attributes: ["id", "user_id", "acknowledged_at"],
         required: false,
         where: { user_id },
+        // separate:true runs a sub-query so the LEFT JOIN isn't
+        // silently converted to INNER JOIN by the WHERE clause
+        separate: true,
       },
     ],
     order: [["created_at", "DESC"]],

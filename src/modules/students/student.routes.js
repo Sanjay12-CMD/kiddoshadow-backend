@@ -65,7 +65,7 @@ router.get(
 router.get(
   "/",
   protect,
-  allowRoles("school_admin", "teacher"),
+  allowRoles("school_admin", "teacher", "super_admin"),
   listStudents
 );
 

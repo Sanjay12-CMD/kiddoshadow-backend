@@ -1,13 +1,16 @@
 import db from "../../config/db.js";
 import User from "../users/user.model.js";
 import Teacher from "./teacher.model.js";
+import TeacherAssignment from "../teacher-assignments/teacher-assignment.model.js";
+import Class from "../classes/classes.model.js";
+import Section from "../sections/section.model.js";
 import AppError from "../../shared/appError.js";
 import { getPagination } from "../../shared/utils/pagination.js";
 
 /* =========================
    ADMIN: CREATE TEACHER
 ========================= */
-export const createTeacherService = async ({ school_id }) => {
+export const createTeacherService = async ({ school_id, class_id, section_id }) => {
   return db.transaction(async (t) => {
     /**
      * 1️⃣ Get next serial (school-level)
@@ -17,21 +20,23 @@ export const createTeacherService = async ({ school_id }) => {
       transaction: t,
     });
 
-    const serial = count + 1;
-    const username = `TCH-${school_id}-${String(serial).padStart(3, "0")}`;
-    const password = `${username}@123`;
+    let serial = count + 1;
+    let username = `TCH-${school_id}-${String(serial).padStart(3, "0")}`;
 
     /**
      * 2️⃣ Safety check (extremely unlikely, but correct)
      */
-    const exists = await User.findOne({
-      where: { school_id, username },
-      transaction: t,
-    });
-
-    if (exists) {
-      throw new AppError("Generated teacher username already exists", 409);
+    while (true) {
+      const exists = await User.findOne({
+        where: { school_id, username },
+        transaction: t,
+      });
+      if (!exists) break;
+      serial += 1;
+      username = `TCH-${school_id}-${String(serial).padStart(3, "0")}`;
     }
+
+    const password = `${username}@123`;
 
     /**
      * 3️⃣ Create user
@@ -63,6 +68,42 @@ export const createTeacherService = async ({ school_id }) => {
       },
       { transaction: t }
     );
+
+    if (class_id || section_id) {
+      const classIdNum = Number(class_id);
+      const sectionIdNum = Number(section_id);
+
+      if (!Number.isFinite(classIdNum) || !Number.isFinite(sectionIdNum)) {
+        throw new AppError("class_id and section_id are required to assign teacher", 400);
+      }
+
+      const [cls, section] = await Promise.all([
+        Class.findOne({
+          where: { id: classIdNum, school_id },
+          transaction: t,
+        }),
+        Section.findOne({
+          where: { id: sectionIdNum, class_id: classIdNum, school_id },
+          transaction: t,
+        }),
+      ]);
+
+      if (!cls) throw new AppError("Class not found", 404);
+      if (!section) throw new AppError("Section not found", 404);
+
+      await TeacherAssignment.create(
+        {
+          school_id,
+          teacher_id: teacher.id,
+          class_id: classIdNum,
+          section_id: sectionIdNum,
+          subject_id: null,
+          is_active: true,
+          is_class_teacher: false,
+        },
+        { transaction: t }
+      );
+    }
 
     /**
      * 5️⃣ Return admin-safe response
@@ -111,6 +152,39 @@ export const listTeacherOptionsService = async ({ school_id }) => {
     attributes: ["id", "user_id", "employee_id", "approval_status", "is_active"],
     order: [[User, "username", "ASC"]],
   });
+};
+
+/* =========================
+   ADMIN: LIST TEACHERS BY SECTION
+========================= */
+export const listTeachersBySectionService = async ({ school_id, section_id }) => {
+  const sectionIdNum = Number(section_id);
+  if (!Number.isFinite(sectionIdNum)) {
+    throw new AppError("Invalid section id", 400);
+  }
+
+  const rows = await Teacher.findAll({
+    where: { school_id },
+    include: [
+      {
+        model: User,
+        attributes: ["id", "username", "name", "is_active"],
+      },
+      {
+        model: TeacherAssignment,
+        attributes: ["id", "section_id", "class_id", "subject_id", "is_active"],
+        where: {
+          school_id,
+          section_id: sectionIdNum,
+          is_active: true,
+        },
+        required: true,
+      },
+    ],
+    order: [[User, "username", "ASC"]],
+  });
+
+  return rows;
 };
 
 /* =========================

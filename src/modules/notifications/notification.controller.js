@@ -49,7 +49,11 @@ export const listNotifications = asyncHandler(async (req, res) => {
   if (req.user.role === "teacher") {
     const TeacherAssignment = (await import("../teacher-assignments/teacher-assignment.model.js")).default;
     const assignments = await TeacherAssignment.findAll({
-      where: { teacher_id: req.user.id },
+      where: {
+        teacher_id: req.user.teacher_id,
+        school_id: req.user.school_id,
+        is_active: true,
+      },
       attributes: ["class_id", "section_id"],
     });
     classIds = [

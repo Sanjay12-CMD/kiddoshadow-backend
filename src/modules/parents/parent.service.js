@@ -1,4 +1,5 @@
 import db from "../../config/db.js";
+import { Op } from "sequelize";
 import User from "../users/user.model.js";
 import Parent from "./parent.model.js";
 import Student from "../students/student.model.js";
@@ -149,6 +150,45 @@ export const updateParentProfileService = async (user_id, data) => {
     throw new AppError("Parent not found", 404);
   }
 
+  if (data?.phone) {
+    const existingPhoneUser = await User.findOne({
+      where: {
+        phone: data.phone,
+        id: { [Op.ne]: user_id },
+      },
+      attributes: ["id", "role"],
+    });
+
+    if (existingPhoneUser) {
+      let allowedLinkedStudent = false;
+
+      if (existingPhoneUser.role === "student") {
+        const links = await Parent.findAll({
+          where: { user_id },
+          attributes: ["student_id"],
+        });
+
+        const linkedStudentIds = links.map((l) => Number(l.student_id)).filter(Boolean);
+
+        if (linkedStudentIds.length) {
+          const student = await Student.findOne({
+            where: {
+              id: { [Op.in]: linkedStudentIds },
+              user_id: existingPhoneUser.id,
+            },
+            attributes: ["id"],
+          });
+
+          allowedLinkedStudent = Boolean(student);
+        }
+      }
+
+      if (!allowedLinkedStudent) {
+        throw new AppError("Phone already in use", 400);
+      }
+    }
+  }
+
   await user.update(data);
 
   const parent = await Parent.findOne({ where: { user_id } });
@@ -171,9 +211,19 @@ export const listParentsService = async ({ school_id, query }) => {
   const safeQuery = query || {};
 
   const where = {};
+  const studentWhere = { school_id };
+
   const status = safeQuery.approval_status;
   if (["pending", "approved", "rejected"].includes(status)) {
     where.approval_status = status;
+  }
+
+  if (safeQuery.class_id) {
+    studentWhere.class_id = Number(safeQuery.class_id);
+  }
+
+  if (safeQuery.section_id) {
+    studentWhere.section_id = Number(safeQuery.section_id);
   }
 
   return Parent.findAndCountAll({
@@ -188,7 +238,7 @@ export const listParentsService = async ({ school_id, query }) => {
       {
         model: Student,
         required: true,
-        where: { school_id },
+        where: studentWhere,
         attributes: ["id", "class_id", "section_id", "user_id"],
         include: [
           {

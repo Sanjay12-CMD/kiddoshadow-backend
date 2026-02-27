@@ -2,6 +2,7 @@ import asyncHandler from "../../shared/asyncHandler.js";
 import AppError from "../../shared/appError.js";
 import Student from "../students/student.model.js";
 import Parent from "../parents/parent.model.js";
+import { triggerExamNotification } from "../notifications/notification-trigger.service.js";
 import {
   createExamService,
   lockExamService,
@@ -12,6 +13,16 @@ export const createExam = asyncHandler(async (req, res) => {
   const exam = await createExamService({
     school_id: req.user.school_id,
     ...req.body,
+  });
+
+  await triggerExamNotification({
+    school_id: req.user.school_id,
+    sender_user_id: req.user.id,
+    sender_role: req.user.role,
+    exam_name: exam.name,
+    class_id: exam.class_id,
+    start_date: exam.start_date,
+    end_date: exam.end_date,
   });
 
   res.status(201).json({

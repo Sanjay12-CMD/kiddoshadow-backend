@@ -113,10 +113,24 @@ export const createStudentService = async ({
 
 export const listStudentsService = async ({ school_id, query }) => {
   const { limit, offset } = getPagination(query);
-  const where = { school_id };
+  const where = {};
+
+  if (school_id !== undefined && school_id !== null) {
+    where.school_id = school_id;
+  }
 
   if (query?.class_id) where.class_id = Number(query.class_id);
   if (query?.section_id) where.section_id = Number(query.section_id);
+
+  const sortMap = {
+    id: "id",
+    roll_no: "roll_no",
+    admission_no: "admission_no",
+    created_at: "created_at",
+  };
+  const sortBy = sortMap[query?.sort] || "created_at";
+  const sortOrder =
+    String(query?.order || "DESC").toUpperCase() === "ASC" ? "ASC" : "DESC";
 
   return Student.findAndCountAll({
     where,
@@ -127,7 +141,7 @@ export const listStudentsService = async ({ school_id, query }) => {
       { model: Class, attributes: ["id", "class_name"] },
       { model: Section, attributes: ["id", "name"] },
     ],
-    order: [["created_at", "DESC"]],
+    order: [[sortBy, sortOrder]],
   });
 };
 

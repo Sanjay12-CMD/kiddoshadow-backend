@@ -10,7 +10,6 @@ const School = db.define(
       autoIncrement: true,
       primaryKey: true,
     },
-
     school_name: {
       type: DataTypes.STRING,
       allowNull: false,
@@ -18,13 +17,18 @@ const School = db.define(
 
     school_code: {
       type: DataTypes.STRING,
-      allowNull: false,
+      allowNull: false, 
       unique: true,
+    },
+    school_type: {
+      type: DataTypes.ENUM("state", "cbse"),
+      allowNull: false,
+      defaultValue: "cbse",
     },
 
     cbse_affiliation_no: {
       type: DataTypes.STRING,
-      allowNull: false,
+      allowNull: true,
       unique: true,
     },
 
@@ -63,6 +67,19 @@ const School = db.define(
       allowNull: false,
       unique: true,
     },
+    reference_name: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+
+    reference_percentage: {
+      type: DataTypes.DECIMAL(5, 2),
+      allowNull: true,
+    },
+    payment_mode: {
+      type: DataTypes.ENUM("half_yearly", "quarterly", "annual"),
+      allowNull: true,
+    },
 
     status: {
       type: DataTypes.ENUM("pending", "active", "suspended", "expired"),
@@ -81,3 +98,4 @@ const School = db.define(
 );
 
 export default School;
+    

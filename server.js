@@ -19,6 +19,24 @@ import { initNotificationSocket } from "./src/socket/notification.socket.js";
 
 const app = express();
 const PORT = process.env.PORT || 3002;
+const ALLOWED_ORIGINS = [
+  "http://localhost:5173",
+  "http://localhost:5174",
+  "http://localhost:5176",
+  "http://127.0.0.1:5173",
+  "http://127.0.0.1:5174",
+  "http://127.0.0.1:5176",
+  "https://adminpanel.xtown.in",
+  "https://kiddoerp.xtown.in",
+  "https://school.xtown.in",
+  "http://192.168.1.16:5173",
+  "http://192.168.1.16:5173/",
+  "http://192.168.1.6:5174",
+  "http://192.168.1.6:5174/",
+  "http://192.168.1.4:5174",
+  "http://192.168.1.4:5176",
+  "http://192.168.1.40:5174"
+];
 
 
 //env validation
@@ -37,15 +55,9 @@ const httpServer = createServer(app);
 
 const io = new Server(httpServer, {
   cors: {
-    origin: [
-      "http://localhost:5173",
-      "http://localhost:5174",
-      "https://adminpanel.xtown.in",
-      "https://school.xtown.in",
-      "http://192.168.1.16:5173/",
-    ],
+    origin: ALLOWED_ORIGINS,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
-    allowedHeaders: ["Content-Type", "Authorization"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Chat-Language"],
     credentials: true,
   },
 });
@@ -56,15 +68,9 @@ initNotificationSocket(io);
 
 // MIDDLEWARES
 app.use(cors({
-  origin: [
-    "http://localhost:5173",
-    "http://localhost:5174",
-    "https://adminpanel.xtown.in",
-    "https://school.xtown.in",
-    "http://192.168.1.16:5173/",
-  ],
+  origin: ALLOWED_ORIGINS,
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
-  allowedHeaders: ["Content-Type", "Authorization"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Chat-Language"],
   credentials: true,
 }));
 
@@ -123,6 +129,9 @@ import groupChatRoutes from "./src/modules/group-chat/group-chat.routes.js";
 import gameRoutes from "./src/modules/game/game.routes.js";
 import quizRoutes from "./src/modules/quiz/quiz.routes.js";
 
+import paymentLogRoutes from "./src/modules/payment-logs/payment-log.routes.js";
+import voiceRoutes from "./src/modules/voice-logs/voice.routes.js";
+
 
 
 // auth
@@ -148,6 +157,7 @@ app.use("/api/classes", classRoutes);
 app.use("/api/timetables", timetableRoutes);
 app.use("/api/report-cards", reportCardRoutes);
 app.use("/api/exams", examRoutes);
+app.use("/api/payment-logs", paymentLogRoutes);
 
 // approvals
 app.use("/api", approvalRoutes);
@@ -185,6 +195,7 @@ app.use("/api/homework", homeworkRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/group-chat", groupChatRoutes);
 app.use("/api/game", gameRoutes);
+app.use("/api/voice", voiceRoutes);
 
 
 // 404 + ERROR HANDLER
@@ -200,7 +211,7 @@ try {
   await db.authenticate();
   console.log("DB connected");
 
-  await db.sync({ force: false });
+  await db.sync({ force : false });
 
   httpServer.listen(PORT, "0.0.0.0", () => {
     console.log(`Server + Socket running on port ${PORT}`);

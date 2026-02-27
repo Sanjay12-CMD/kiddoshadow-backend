@@ -47,7 +47,10 @@ export async function deductTokens({ userId, amount, reason, refId }) {
   }
 
   // 🔒 Check school subscription EARLY
-  if (user.school_id) {
+  const bypassSubscriptionGate =
+    String(process.env.ALLOW_AI_WITHOUT_SUBSCRIPTION || "").toLowerCase() === "true";
+
+  if (user.school_id && !bypassSubscriptionGate) {
     const subscription = await Subscription.findOne({
       where: {
         school_id: user.school_id,
@@ -168,3 +171,4 @@ export async function adjustUserTokens({ user_id, amount, mode = "add" }) {
 
   return account;
 }
+

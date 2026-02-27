@@ -1,24 +1,97 @@
 import jwt from "jsonwebtoken";
+import { Op } from "sequelize";
 import asyncHandler from "../../shared/asyncHandler.js";
 import AppError from "../../shared/appError.js";
 import User from "../users/user.model.js";
 import School from "../schools/school.model.js";
 
 export const login = asyncHandler(async (req, res) => {
-  const { username, password } = req.body; // already validated by Zod
+  const { username, email, password } = req.body; // already validated by Zod
+  const identifiers = [];
+  if (username) identifiers.push({ username });
+  if (email) identifiers.push({ email });
 
-  const user = await User.findOne({ where: { username } });
+  let user = await User.findOne({
+    where: {
+      [Op.or]: identifiers,
+    },
+  });
+
+
+
+
+
+// export const login = asyncHandler(async (req, res) => {
+
+//   // ✅ TEMP DEV LOGIN (DO NOT REMOVE REAL CODE BELOW)
+//   if (process.env.DEV_LOGIN === "true") {
+
+//   const devToken = jwt.sign(
+//     {
+//       id: 3,
+//       role: "student",
+//       school_id: 1
+//     },
+//     process.env.JWT_SECRET,
+//     { expiresIn: "7d" }
+//   );
+
+//   return res.status(200).json({
+//     message: "Dev login success",
+//     token: devToken
+//   });
+// }
+
+
+
+
+  // Bootstrap super admin on first login if env credentials are configured
+  if (!user && username && password) {
+    const envSuperUsername = process.env.SUPER_ADMIN_USERNAME;
+    const envSuperPassword = process.env.SUPER_ADMIN_PASSWORD;
+    const isSuperAdminLogin =
+      username === envSuperUsername && password === envSuperPassword;
+
+    if (isSuperAdminLogin) {
+      const existingSuperAdmin = await User.findOne({
+        where: { role: "super_admin" },
+      });
+
+      if (!existingSuperAdmin) {
+        user = await User.create({
+          role: "super_admin",
+          username: envSuperUsername,
+          password: envSuperPassword,
+          name: "Super Admin",
+          is_active: true,
+          first_login: false,
+        });
+      }
+    }
+  }
+    // check user exists
   if (!user) {
-    throw new AppError("Username not found", 401);
+    throw new AppError("Invalid credentials", 401);
   }
 
-  if (!user.is_active) {
-    throw new AppError("User account disabled", 403);
+  // password check
+  const isMatch = password === user.password;
+
+  if (!isMatch) {
+    throw new AppError("Invalid credentials", 401);
   }
 
-  if (password !== user.password) {
-    throw new AppError("Password is wrong", 401);
-  }
+  // if (!user) {
+  //   throw new AppError("User not found", 401);
+  // }
+
+  // if (!user.is_active) {
+  //   throw new AppError("User account disabled", 403);
+  // }
+
+  // if (password !== user.password) {
+  //   throw new AppError("Password is wrong", 401);
+  // }
 
   // school check (except super admin)
   if (user.role !== "super_admin") {

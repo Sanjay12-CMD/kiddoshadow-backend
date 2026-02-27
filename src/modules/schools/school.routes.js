@@ -5,6 +5,7 @@ import { validate } from "../../shared/middlewares/validate.js";
 
 import {
   createSchool,
+  getSchoolDetails,
   listSchools,
   updateSchoolStatus,
   updateSchoolAdminStatus,
@@ -19,6 +20,13 @@ import {
 } from "./school.schema.js";
 
 const router = express.Router();
+
+router.get(
+  "/:id/details",
+  protect,
+  allowRoles("super_admin", "school_admin"),
+  getSchoolDetails
+);
 
 router.use(protect, allowRoles("super_admin"));
 

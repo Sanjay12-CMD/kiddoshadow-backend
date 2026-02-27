@@ -12,6 +12,7 @@ import {
 } from "./student.service.js";
 import Student from "./student.model.js";
 import User from "../users/user.model.js";
+import Parent from "../parents/parent.model.js";
 
 /* ADMIN: AUTO CREATE */
 export const createStudent = asyncHandler(async (req, res) => {
@@ -30,8 +31,20 @@ export const createStudent = asyncHandler(async (req, res) => {
 
 /* ADMIN: LIST */
 export const listStudents = asyncHandler(async (req, res) => {
+  let school_id = req.user.school_id;
+  if (req.user.role === "super_admin") {
+    if (req.query.school_id !== undefined) {
+      school_id = Number(req.query.school_id);
+      if (!Number.isFinite(school_id)) {
+        throw new AppError("Invalid school_id", 400);
+      }
+    } else {
+      school_id = undefined;
+    }
+  }
+
   const result = await listStudentsService({
-    school_id: req.user.school_id,
+    school_id,
     query: req.query,
   });
 
@@ -94,7 +107,16 @@ export const completeStudentProfile = asyncHandler(async (req, res) => {
   if (phone) {
     const existingPhone = await User.findOne({ where: { phone } });
     if (existingPhone && existingPhone.id !== req.user.id) {
-      throw new AppError("Phone already in use", 400);
+      const linkedParent = await Parent.findOne({
+        where: {
+          user_id: existingPhone.id,
+          student_id: student.id,
+        },
+      });
+
+      if (!linkedParent) {
+        throw new AppError("Phone already in use", 400);
+      }
     }
   }
 
@@ -103,7 +125,7 @@ export const completeStudentProfile = asyncHandler(async (req, res) => {
   if (phone !== undefined) userUpdates.phone = phone;
   if (req.body.email !== undefined) userUpdates.email = req.body.email;
   if (avatar_url !== undefined) userUpdates.avatar_url = avatar_url || null;
-  if (req.user.first_login && name !== undefined) {
+  if (req.user.first_login) {
     userUpdates.first_login = false;
   }
 

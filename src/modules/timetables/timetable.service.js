@@ -183,12 +183,13 @@ export const getTeacherTimetableService = async ({
   school_id,
   teacher_id,
 }) => {
+  const teacherIds = Array.isArray(teacher_id) ? teacher_id : [teacher_id];
   const rows = await Timetable.findAll({
     include: [
       {
         model: TeacherAssignment,
         where: {
-          teacher_id,
+          teacher_id: { [Op.in]: teacherIds.filter(Boolean) },
           school_id,
           is_active: true,
         },

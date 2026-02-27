@@ -1,4 +1,6 @@
 import asyncHandler from "../../shared/asyncHandler.js";
+import AppError from "../../shared/appError.js";
+import { resolveTeacherId } from "../../shared/utils/resolveTeacherId.js";
 import {
   saveTimetableService,
   getSectionTimetableService,
@@ -35,9 +37,14 @@ export const getSectionTimetable = asyncHandler(async (req, res) => {
 
 /* TEACHER: VIEW OWN TIMETABLE */
 export const getTeacherTimetable = asyncHandler(async (req, res) => {
+  const teacherId = await resolveTeacherId(req.user);
+  if (!teacherId) {
+    throw new AppError("Teacher profile not found", 404);
+  }
+
   const timetable = await getTeacherTimetableService({
     school_id: req.user.school_id,
-    teacher_id: req.user.teacher_id,
+    teacher_id: [teacherId, req.user.id],
   });
 
   res.json({

@@ -23,7 +23,13 @@ export const validate = (schema) => (req, res, next) => {
 
     next();
   } catch (err) {
-    const message = err.errors?.[0]?.message || "Invalid request";
+    const firstIssue = err?.issues?.[0] || err?.errors?.[0];
+    const path = Array.isArray(firstIssue?.path) ? firstIssue.path.join(".") : "";
+    const issueMessage = firstIssue?.message;
+    const message =
+      path && issueMessage
+        ? `${path}: ${issueMessage}`
+        : issueMessage || err?.message || "Invalid request";
     next(new AppError(message, 400));
   }
 };

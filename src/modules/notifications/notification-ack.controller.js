@@ -24,6 +24,7 @@ export const listNotificationAcks = asyncHandler(async (req, res) => {
   const data = await listNotificationAcksService({
     notification_id: req.params.id,
     requester: req.user,
+    query: req.query,
   });
 
   res.json({

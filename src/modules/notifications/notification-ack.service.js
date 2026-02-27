@@ -62,7 +62,7 @@ export const listNotificationAcksService = async ({
   return NotificationAck.findAndCountAll({
     where: { notification_id },
     include: [{ model: Notification }],
-    order: [["created_at", "DESC"]],
+    order: [["acknowledged_at", "DESC"]],
     limit,
     offset,
   });

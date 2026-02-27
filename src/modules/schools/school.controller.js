@@ -1,6 +1,7 @@
 import asyncHandler from "../../shared/asyncHandler.js";
 import {
   createSchoolService,
+  getSchoolDetailsService,
   listSchoolsService,
   updateSchoolStatusService,
   updateSchoolAdminStatusService,
@@ -47,4 +48,17 @@ export const resetSchoolAdminPassword = asyncHandler(async (req, res) => {
   });
 
   res.json({ message: "Password reset", admin: result });
+});
+
+/* SCHOOL DETAILS */
+export const getSchoolDetails = asyncHandler(async (req, res) => {
+  const school = await getSchoolDetailsService({
+    requester: req.user,
+    school_id: req.params.id,
+  });
+
+  res.json({
+    success: true,
+    data: school,
+  });
 });

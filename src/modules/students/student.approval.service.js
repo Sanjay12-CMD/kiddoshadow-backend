@@ -3,6 +3,7 @@ import Student from "./student.model.js";
 import User from "../users/user.model.js";
 import AppError from "../../shared/appError.js";
 import { logApprovalAction } from "../../shared/utils/auditLogger.js";
+import TeacherAssignment from "../teacher-assignments/teacher-assignment.model.js";
 
 /* =========================
    STUDENT: REQUEST UPDATE
@@ -49,6 +50,7 @@ export const requestStudentProfileUpdateService = async (
 export const approveStudentProfileService = async ({
   student_id,
   teacher_user_id,
+  teacher_id,
   school_id,
   action,
   remark, // ✅ NOW DEFINED
@@ -61,6 +63,20 @@ export const approveStudentProfileService = async ({
 
     if (!student) {
       throw new AppError("Student not found", 404);
+    }
+
+    const hasAssignment = await TeacherAssignment.findOne({
+      where: {
+        school_id,
+        teacher_id,
+        section_id: student.section_id,
+        is_active: true,
+      },
+      transaction: t,
+    });
+
+    if (!hasAssignment) {
+      throw new AppError("Only assigned teachers can approve this student", 403);
     }
 
     if (student.approval_status !== "pending") {

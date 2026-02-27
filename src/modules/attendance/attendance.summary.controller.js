@@ -1,4 +1,6 @@
 import asyncHandler from "../../shared/asyncHandler.js";
+import AppError from "../../shared/appError.js";
+import { resolveTeacherId } from "../../shared/utils/resolveTeacherId.js";
 import {
   markAttendanceService,
   getTeacherAttendanceSummaryService,
@@ -10,15 +12,23 @@ import {
    TEACHER: MARK
 ========================= */
 export const markAttendance = asyncHandler(async (req, res) => {
-  await markAttendanceService({
+  const teacherId = await resolveTeacherId(req.user);
+  if (!teacherId) {
+    throw new AppError("Teacher profile not found", 404);
+  }
+
+  const result = await markAttendanceService({
     user: req.user,
+    teacher_id: teacherId,
     school_id: req.user.school_id,
     ...req.body,
   });
 
   res.status(201).json({
     success: true,
-    message: "Attendance marked successfully",
+    message: result?.message || "Attendance marked successfully",
+    saved: result?.saved ?? 0,
+    skipped: result?.skipped ?? [],
   });
 });
 
@@ -26,10 +36,15 @@ export const markAttendance = asyncHandler(async (req, res) => {
    TEACHER: SUMMARY
 ========================= */
 export const getTeacherAttendanceSummary = asyncHandler(async (req, res) => {
+  const teacherId = await resolveTeacherId(req.user);
+  if (!teacherId) {
+    throw new AppError("Teacher profile not found", 404);
+  }
+
   const result = await getTeacherAttendanceSummaryService({
     school_id: req.user.school_id,
     query: req.query,
-    teacher_id: req.user.teacher_id,
+    teacher_id: teacherId,
   });
 
   res.json({

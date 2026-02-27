@@ -19,7 +19,12 @@ export async function assignTeacher({
   isClassTeacher = false,
 }) {
   const [teacher, cls, section, subject] = await Promise.all([
-    Teacher.findOne({ where: { id: teacherId, school_id: schoolId } }),
+    Teacher.findOne({
+      where: {
+        school_id: schoolId,
+        [Op.or]: [{ id: teacherId }, { user_id: teacherId }],
+      },
+    }),
     Class.findOne({ where: { id: classId, school_id: schoolId } }),
     Section.findOne({
       where: { id: sectionId, class_id: classId, school_id: schoolId, is_active: true },
@@ -44,7 +49,7 @@ export async function assignTeacher({
   const exists = await TeacherAssignment.findOne({
     where: {
       school_id: schoolId,
-      teacher_id: teacherId,
+      teacher_id: teacher.id,
       section_id: sectionId,
       subject_id: subjectId,
       is_active: true,
@@ -79,7 +84,7 @@ export async function assignTeacher({
 
   return TeacherAssignment.create({
     school_id: schoolId,
-    teacher_id: teacherId,
+    teacher_id: teacher.id,
     class_id: classId,
     section_id: sectionId,
     subject_id: subjectId,
@@ -104,10 +109,11 @@ export async function listAssignments({ schoolId, query }) {
 
 /* LIST BY TEACHER */
 export async function getTeacherAssignments({ schoolId, teacherId }) {
+  const teacherIds = Array.isArray(teacherId) ? teacherId : [teacherId];
   return TeacherAssignment.findAll({
     where: {
       school_id: schoolId,
-      teacher_id: teacherId,
+      teacher_id: { [Op.in]: teacherIds.filter(Boolean) },
       is_active: true,
     },
     include: [

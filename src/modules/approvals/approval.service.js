@@ -9,6 +9,7 @@ import User from "../users/user.model.js";
 import TeacherAssignment from "../teacher-assignments/teacher-assignment.model.js";
 import Class from "../classes/classes.model.js";
 import Section from "../sections/section.model.js";
+import { resolveTeacherId } from "../../shared/utils/resolveTeacherId.js";
 
 const resolveSchoolId = (school_id, user) => {
   const resolved = school_id ?? user?.school_id;
@@ -190,6 +191,9 @@ export const processApprovalAction = async ({
   })();
 
   // 1. Validate Action
+  if (!["approve", "reject"].includes(action)) {
+    throw new AppError("Invalid action", 400);
+  }
   const status = action === "approve" ? "approved" : "rejected";
 
   // 2. Determine Target Model
@@ -201,8 +205,29 @@ export const processApprovalAction = async ({
 
   // 3. Find Entity
   const include =
-    normalizedType === "parent" ? [{ model: User, attributes: ["school_id"] }] : undefined;
-  const entity = await Model.findByPk(id, include ? { include } : undefined);
+    normalizedType === "parent"
+      ? [
+          { model: User, attributes: ["school_id"] },
+          { model: Student, attributes: ["id", "section_id", "school_id"] },
+        ]
+      : undefined;
+
+  const normalizedId = Number(id);
+  let entity;
+
+  if (normalizedType === "student" || normalizedType === "teacher") {
+    // Accept either profile-table id OR linked user_id to avoid frontend id-shape mismatch.
+    entity = await Model.findOne({
+      where: {
+        school_id: user.school_id,
+        [Op.or]: [{ id: normalizedId }, { user_id: normalizedId }],
+      },
+      ...(include ? { include } : {}),
+    });
+  } else {
+    entity = await Model.findByPk(id, include ? { include } : undefined);
+  }
+
   if (!entity) throw new AppError("Entity not found", 404);
 
   const entitySchoolId =
@@ -210,28 +235,71 @@ export const processApprovalAction = async ({
 
   // 4. Permission Check (CRITICAL)
   if (user.role === "teacher") {
-    if (entitySchoolId !== user.school_id) {
+    if (String(entitySchoolId) !== String(user.school_id)) {
       throw new AppError("Unauthorized", 403);
     }
 
-    if (type === "student") {
+    const resolvedTeacherId = user.teacher_id ?? (await resolveTeacherId(user));
+    if (!resolvedTeacherId) {
+      throw new AppError("Teacher profile not found", 403);
+    }
+
+    if (normalizedType === "student") {
+      const sectionId = entity.section_id ?? null;
+      const classId = entity.class_id ?? null;
+
+      if (!sectionId && !classId) {
+        throw new AppError("Student class/section missing", 403);
+      }
+
+      const assignmentWhere = {
+        school_id: user.school_id,
+        teacher_id: resolvedTeacherId,
+        is_active: true,
+      };
+
+      const scopeFilters = [];
+      if (sectionId) scopeFilters.push({ section_id: sectionId });
+      if (classId) scopeFilters.push({ class_id: classId });
+      if (scopeFilters.length === 1) {
+        Object.assign(assignmentWhere, scopeFilters[0]);
+      } else if (scopeFilters.length > 1) {
+        assignmentWhere[Op.or] = scopeFilters;
+      }
+
       const hasAssignment = await TeacherAssignment.findOne({
+        where: assignmentWhere,
+      });
+
+      if (!hasAssignment) {
+        throw new AppError("Only assigned teachers can approve this student", 403);
+      }
+    }
+
+    if (normalizedType === "parent") {
+      const linkedStudent = entity.student ?? entity.Student;
+      if (!linkedStudent) {
+        throw new AppError("Parent linked student not found", 404);
+      }
+
+      const hasClassTeacherAssignment = await TeacherAssignment.findOne({
         where: {
           school_id: user.school_id,
-          teacher_id: user.teacher_id,
-          section_id: entity.section_id,
+          teacher_id: resolvedTeacherId,
+          section_id: linkedStudent.section_id,
+          is_class_teacher: true,
           is_active: true,
         },
       });
 
-      if (!hasAssignment) {
-        throw new AppError("Forbidden role", 403);
+      if (!hasClassTeacherAssignment) {
+        throw new AppError("Only class teacher can approve this parent", 403);
       }
     }
   }
 
   if (user.role === "school_admin") {
-    if (entitySchoolId !== user.school_id) {
+    if (String(entitySchoolId) !== String(user.school_id)) {
       throw new AppError("Unauthorized", 403);
     }
   }

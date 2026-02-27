@@ -48,6 +48,45 @@ export const triggerHomeworkNotification = async ({
 };
 
 /* ===============================
+   EXAM CREATED
+================================ */
+export const triggerExamNotification = async ({
+  school_id,
+  sender_user_id,
+  sender_role,
+  exam_name,
+  class_id,
+  section_id,
+  start_date,
+  end_date,
+}) => {
+  const formattedStart = start_date
+    ? new Date(start_date).toLocaleDateString("en-GB")
+    : null;
+  const formattedEnd = end_date
+    ? new Date(end_date).toLocaleDateString("en-GB")
+    : null;
+
+  let message = `A new exam "${exam_name}" has been scheduled.`;
+  if (formattedStart && formattedEnd) {
+    message += ` Dates: ${formattedStart} to ${formattedEnd}.`;
+  } else if (formattedStart) {
+    message += ` Date: ${formattedStart}.`;
+  }
+
+  return createNotification({
+    school_id,
+    sender_user_id,
+    sender_role,
+    title: "New Exam Scheduled",
+    message,
+    target_role: "all", // students + parents
+    class_id,
+    section_id,
+  });
+};
+
+/* ===============================
    REPORT CARD PUBLISHED
 ================================ */
 export const triggerReportCardNotification = async ({
@@ -64,7 +103,7 @@ export const triggerReportCardNotification = async ({
     sender_role: "teacher",
     title: "Report Card Published",
     message: `Report card for ${student_name} (${exam_name}) has been published.`,
-    target_role: "parent", // parents only
+    target_role: "all", // students + parents
     class_id,
     section_id,
   });

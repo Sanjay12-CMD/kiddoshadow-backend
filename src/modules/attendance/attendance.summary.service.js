@@ -14,14 +14,17 @@ import TeacherClassSession from "../teacher-class-sessions/teacher-class-session
 ========================= */
 export const markAttendanceService = async ({
   user,
+  teacher_id,
   school_id,
   teacher_class_session_id,
   records, // [{ student_id, status }]
 }) => {
-  // 1️⃣ Validate session
+  const normalizedSessionId = Number(teacher_class_session_id);
+  const normalizedTeacherId = Number(teacher_id);
+
   const session = await TeacherClassSession.findOne({
     where: {
-      id: teacher_class_session_id,
+      id: normalizedSessionId,
       school_id,
     },
   });
@@ -30,44 +33,77 @@ export const markAttendanceService = async ({
     throw new AppError("SESSION_NOT_ACTIVE", 400);
   }
 
-  // 2️⃣ Permission check
-  if (user.role === "teacher" && session.teacher_id !== user.teacher_id) {
+  if (user.role === "teacher" && Number(session.teacher_id) !== normalizedTeacherId) {
     throw new AppError("FORBIDDEN", 403);
   }
 
-  // 3️⃣ Mark attendance
   const attendanceDate = session.started_at
     ? new Date(session.started_at)
     : new Date();
 
-  for (const { student_id, status } of records) {
-    const student = await Student.findOne({
-      where: {
-        id: student_id,
-        school_id,
-        class_id: session.class_id,
-        section_id: session.section_id,
-        is_active: true,
-      },
-    });
+  const requestedIds = [
+    ...new Set(
+      (records || [])
+        .map((r) => Number(r?.student_id))
+        .filter((id) => Number.isInteger(id) && id > 0)
+    ),
+  ];
 
-    if (!student) {
-      throw new AppError(`INVALID_STUDENT ${student_id}`, 400);
+  const enrolledStudents = requestedIds.length
+    ? await Student.findAll({
+        where: {
+          school_id,
+          class_id: session.class_id,
+          section_id: session.section_id,
+          is_active: true,
+          [Op.or]: [{ id: requestedIds }, { user_id: requestedIds }],
+        },
+        attributes: ["id", "user_id"],
+      })
+    : [];
+
+  const studentIdMap = new Map();
+  for (const student of enrolledStudents) {
+    const sid = Number(student.id);
+    const uid = Number(student.user_id);
+    if (Number.isInteger(sid) && sid > 0) studentIdMap.set(sid, sid);
+    if (Number.isInteger(uid) && uid > 0) studentIdMap.set(uid, sid);
+  }
+
+  let saved = 0;
+  const skipped = [];
+
+  for (const { student_id, status } of records || []) {
+    const rawId = Number(student_id);
+    const resolvedStudentId = studentIdMap.get(rawId);
+
+    if (!resolvedStudentId) {
+      skipped.push(student_id);
+      continue;
     }
 
     await Attendance.upsert({
       school_id,
-      teacher_class_session_id,
+      teacher_class_session_id: normalizedSessionId,
       class_id: session.class_id,
       section_id: session.section_id,
-      student_id,
+      student_id: resolvedStudentId,
       date: attendanceDate,
       status,
       marked_by: user.id,
     });
+    saved += 1;
   }
 
-  return { message: "Attendance marked successfully" };
+  if (saved === 0) {
+    throw new AppError("No valid students found for this class session", 400);
+  }
+
+  return {
+    message: "Attendance marked successfully",
+    saved,
+    skipped,
+  };
 };
 
 /* =========================
@@ -101,9 +137,7 @@ export const getTeacherAttendanceSummaryService = async ({
       },
       {
         model: Student,
-        include: [
-          { model: User, attributes: ["id", "name"] },
-        ],
+        include: [{ model: User, attributes: ["id", "name"] }],
       },
     ],
     limit,
@@ -114,7 +148,8 @@ export const getTeacherAttendanceSummaryService = async ({
 
 /* =========================
    PARENT: ATTENDANCE SUMMARY
-========================= */export const getParentAttendanceSummaryService = async ({
+========================= */
+export const getParentAttendanceSummaryService = async ({
   parent_user_id,
   query,
 }) => {
@@ -155,10 +190,10 @@ export const getTeacherAttendanceSummaryService = async ({
   });
 };
 
-
 /* =========================
    STUDENT: ATTENDANCE SUMMARY
-========================= */export const getStudentAttendanceSummaryService = async ({
+========================= */
+export const getStudentAttendanceSummaryService = async ({
   student_user_id,
   query,
 }) => {

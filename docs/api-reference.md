@@ -236,14 +236,6 @@ Roles: school_admin
 Response: `{ "total": number, "items": [ { id, username, name, phone, is_active } ] }`
 
 Parents (self)
-PATCH `/api/parents/parents/profile`
-Roles: parent
-Request: `{ "name"?: "string", "phone"?: "string" }`
-Response: `{ "message": "Profile updated", "token": "jwt", "user": { ... } }`
-
-GET `/api/parents/parents/profile`
-Roles: parent
-Response: `{ parent + user + student }` (includes `approval_status`)
 
 Parent Approvals
 POST `/api/teachers/parents`
