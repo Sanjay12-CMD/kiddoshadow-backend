@@ -35,7 +35,7 @@ deactivate () {
 # unset irrelevant variables
 deactivate nondestructive
 
-VIRTUAL_ENV='/home/vishnu/Xtown-Report/backend (2)/venv311'
+VIRTUAL_ENV='/home/vishnu/Downloads/backend 1/backend/venv311'
 export VIRTUAL_ENV
 
 _OLD_VIRTUAL_PATH="$PATH"

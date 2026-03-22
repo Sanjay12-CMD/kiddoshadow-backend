@@ -4,6 +4,7 @@ import TokenPolicy from "./token-policy.model.js";
 import AppError from "../../shared/appError.js";
 import User from "../users/user.model.js";
 import Subscription from "../subscriptions/subscription.model.js";
+import { Op } from "sequelize";
 
 export async function ensureTokenAccount(userId) {
   const user = await User.findByPk(userId);
@@ -41,22 +42,31 @@ export async function deductTokens({ userId, amount, reason, refId }) {
     throw new AppError("User not found", 404);
   }
 
-  // 🔹 Only students & teachers use AI
+  // Only students & teachers allowed
   if (!["student", "teacher"].includes(user.role)) {
     throw new AppError("AI access not allowed for this role", 403);
   }
 
-  // 🔒 Check school subscription EARLY
+  // Allow bypass via env flag
   const bypassSubscriptionGate =
-    String(process.env.ALLOW_AI_WITHOUT_SUBSCRIPTION || "").toLowerCase() === "true";
+    String(process.env.ALLOW_AI_WITHOUT_SUBSCRIPTION || "").toLowerCase() ===
+    "true";
 
+  // Check school subscription
   if (user.school_id && !bypassSubscriptionGate) {
     const subscription = await Subscription.findOne({
       where: {
         school_id: user.school_id,
         status: "active",
+        end_date: {
+          [Op.gt]: new Date(),
+        },
       },
     });
+
+    // Debug logs (temporary)
+    console.log("School ID:", user.school_id);
+    console.log("Subscription found:", subscription);
 
     if (!subscription) {
       throw new AppError(
@@ -66,7 +76,7 @@ export async function deductTokens({ userId, amount, reason, refId }) {
     }
   }
 
-  // 🔹 Skip token work if no tokens used
+  // If AI does not use tokens
   if (amount <= 0) {
     return;
   }
@@ -89,7 +99,6 @@ export async function deductTokens({ userId, amount, reason, refId }) {
     change: -amount,
     balance_before: before,
     balance_after: after,
-    // legacy reference_id is not stored in this model
   });
 }
 
@@ -171,4 +180,3 @@ export async function adjustUserTokens({ user_id, amount, mode = "add" }) {
 
   return account;
 }
-

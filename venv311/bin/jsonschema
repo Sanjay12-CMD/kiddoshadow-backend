@@ -1,10 +1,8 @@
 #!/bin/sh
-'''exec' "/home/vishnu/Xtown-Report/backend (2)/venv311/bin/python3.11" "$0" "$@"
+'''exec' "/home/vishnu/Downloads/backend 1/backend/venv311/bin/python" "$0" "$@"
 ' '''
-# -*- coding: utf-8 -*-
-import re
 import sys
 from jsonschema.cli import main
 if __name__ == '__main__':
-    sys.argv[0] = re.sub(r'(-script\.pyw|\.exe)?$', '', sys.argv[0])
+    sys.argv[0] = sys.argv[0].removesuffix('.exe')
     sys.exit(main())

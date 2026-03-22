@@ -1,6 +1,6 @@
 import asyncHandler from "../../shared/asyncHandler.js";
 import { GoogleGenAI } from "@google/genai";
-import { askRag } from "./rag.service.js";
+import { routeRagQuestion } from "./subjectRouter.js";
 import {
   chunkText,
   textToSpeech,
@@ -68,6 +68,24 @@ const stripLanguageTag = (question) =>
     .replace(/\n?\s*\[\s*target_language\s*:\s*[a-zA-Z_ -]+\s*\]\s*/gi, " ")
     .trim();
 
+const stripLanguageInstructionForSearch = (question) => {
+  let normalized = String(question || "");
+
+  for (const lang of LANGUAGE_MAP) {
+    for (const alias of lang.aliases) {
+      const escaped = alias.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      normalized = normalized
+        .replace(new RegExp(`\\bin\\s+${escaped}\\b`, "gi"), " ")
+        .replace(new RegExp(`\\b${escaped}\\s+only\\b`, "gi"), " ")
+        .replace(new RegExp(`\\banswer\\s+in\\s+${escaped}\\b`, "gi"), " ")
+        .replace(new RegExp(`\\bexplain\\s+in\\s+${escaped}\\b`, "gi"), "explain ")
+        .replace(new RegExp(`\\btranslate\\s+(?:this\\s+)?(?:to|into)\\s+${escaped}\\b`, "gi"), " ");
+    }
+  }
+
+  return normalized.replace(/\s+/g, " ").trim();
+};
+
 const normalizeLanguage = (value) => {
   if (!value) return null;
   const lower = String(value).toLowerCase().trim();
@@ -103,6 +121,13 @@ const LANGUAGE_DISPLAY = {
   sanskrit: "Sanskrit",
 };
 
+const applyNoStoreHeaders = (res) => {
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
+  res.setHeader("Surrogate-Control", "no-store");
+};
+
 const sanitizeTamilOutput = (value) => {
   const text = String(value || "");
   if (!text) return text;
@@ -119,6 +144,8 @@ const sanitizeTamilOutput = (value) => {
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 };
+
+const containsTamil = (value) => /[\u0B80-\u0BFF]/.test(String(value || ""));
 
 const translateViaGtx = async (text, targetLanguage) => {
   const targetCode = LANGUAGE_CODES[targetLanguage];
@@ -352,8 +379,28 @@ const normalizeClassLevel = (value) => {
 };
 
 export const askQuestion = asyncHandler(async (req, res) => {
+  applyNoStoreHeaders(res);
+
   const payload = req.method === "GET" ? req.query : req.body;
-  const { question, classLevel, language, preferredLanguage, lang } = payload;
+  const {
+    question,
+    classLevel,
+    language,
+    preferredLanguage,
+    lang,
+    sourcePath,
+    source_path,
+    bookPath,
+    book_path,
+    pdfPath,
+    pdf_path,
+    currentBook,
+    current_book,
+    selectedBook,
+    selected_book,
+    book,
+    chapter,
+  } = payload;
   const voiceEnabled = req.query.voice === "true";
   const headerLanguage = req.headers["x-chat-language"];
   const queryLanguage = req.query.lang;
@@ -364,6 +411,19 @@ export const askQuestion = asyncHandler(async (req, res) => {
 
   const cleanedQuestion = stripLanguageTag(question);
   const taggedLanguage = extractTaggedLanguage(question);
+  const searchQuestion = stripLanguageInstructionForSearch(cleanedQuestion);
+  const scopedBook =
+    sourcePath ||
+    source_path ||
+    bookPath ||
+    book_path ||
+    pdfPath ||
+    pdf_path ||
+    currentBook ||
+    current_book ||
+    selectedBook ||
+    selected_book ||
+    (book ? { book, chapter } : chapter ? { chapter } : null);
   let effectiveClassLevel = normalizeClassLevel(classLevel);
 
   if (req.user?.role === "student" && req.user?.class_id) {
@@ -378,9 +438,10 @@ export const askQuestion = asyncHandler(async (req, res) => {
 
   let result;
   try {
-    result = await askRag({
-      question: cleanedQuestion,
+    result = await routeRagQuestion({
+      question: searchQuestion || cleanedQuestion,
       classLevel: effectiveClassLevel,
+      bookScope: scopedBook,
       userId: req.user.id,
     });
   } catch (err) {
@@ -415,6 +476,10 @@ export const askQuestion = asyncHandler(async (req, res) => {
       }
     }
 
+    if (!requestedLanguage && (containsTamil(cleanedQuestion) || containsTamil(textAnswer))) {
+      textAnswer = sanitizeTamilOutput(textAnswer);
+    }
+
     return res.json({
       question: cleanedQuestion,
       answer: textAnswer,
@@ -424,25 +489,30 @@ export const askQuestion = asyncHandler(async (req, res) => {
   }
 
   // 🔹 VOICE MODE
-  res.setHeader("Content-Type", "audio/wav");
-  res.setHeader("Transfer-Encoding", "chunked");
-
   const sentences = chunkText(result.answer);
 
-  for (const sentence of sentences) {
-    try {
-      const wavBuffer = await textToSpeech(sentence);
-      res.write(wavBuffer);
-    } catch (err) {
-      console.error("TTS failed:", err.message);
-      break; // stop voice, keep text correctness
-    }
-  }
+// send subtitle text for frontend
+res.setHeader("x-subtitle-text", encodeURIComponent(result.answer));
 
-  res.end();
+res.setHeader("Content-Type", "audio/wav");
+res.setHeader("Transfer-Encoding", "chunked");
+
+for (const sentence of sentences) {
+  try {
+    const wavBuffer = await textToSpeech(sentence);
+    res.write(wavBuffer);
+  } catch (err) {
+    console.error("TTS failed:", err.message);
+    break;
+  }
+}
+
+res.end();
 });
 
 export const speakText = asyncHandler(async (req, res) => {
+  applyNoStoreHeaders(res);
+
   const { text } = req.body;
 
   if (!text || !String(text).trim()) {

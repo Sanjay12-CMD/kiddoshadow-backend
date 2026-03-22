@@ -11,12 +11,29 @@ export async function protect(req, res, next) {
 
     if (process.env.AUTH_BYPASS === "true" && (!header || !header.startsWith("Bearer "))) {
       const bypassId = Number(process.env.AUTH_BYPASS_USER_ID || 1);
-      req.user = {
+      const identity = {
         id: Number.isFinite(bypassId) && bypassId > 0 ? bypassId : 1,
         role: process.env.AUTH_BYPASS_ROLE || "student",
         school_id: null,
         first_login: false,
       };
+      if (identity.role === "teacher") {
+        const teacher = await Teacher.findOne({ where: { user_id: identity.id } });
+        if (teacher) {
+          identity.teacher_id = teacher.id;
+          identity.school_id = teacher.school_id;
+        }
+      }
+      if (identity.role === "student") {
+        const student = await Student.findOne({ where: { user_id: identity.id } });
+        if (student) {
+          identity.student_id = student.id;
+          identity.class_id = student.class_id;
+          identity.section_id = student.section_id;
+          identity.school_id = student.school_id;
+        }
+      }
+      req.user = identity;
       return next();
     }
 

@@ -14,6 +14,9 @@ export const voiceChat = async (req, res) => {
       userId,
     });
 
+    // Expose subtitle text for frontend voice-chat UI.
+    res.set("x-subtitle-text", encodeURIComponent(result.answer || ""));
+    res.set("Access-Control-Expose-Headers", "x-subtitle-text");
     res.set("Content-Type", "audio/wav");
     return res.send(result.audioBuffer);
 

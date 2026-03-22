@@ -39,10 +39,16 @@ export const getPendingStudentApprovalsService = async ({
   };
 
   if (user?.role === "teacher") {
+    const resolvedTeacherId = user.teacher_id ?? (await resolveTeacherId(user));
+    if (!resolvedTeacherId) {
+      return { count: 0, rows: [] };
+    }
+
     const assignments = await TeacherAssignment.findAll({
       where: {
         school_id: scopedSchoolId,
-        teacher_id: user.teacher_id,
+        teacher_id: resolvedTeacherId,
+        is_class_teacher: true,
         is_active: true,
       },
       attributes: ["class_id", "section_id"],
@@ -89,6 +95,82 @@ export const getPendingStudentApprovalsService = async ({
       { model: Class, attributes: ["id", "class_name"] },
       { model: Section, attributes: ["id", "name"] },
     ],
+  });
+};
+
+/* =========================
+   TEACHER: PARENT PENDING (CLASS TEACHER ONLY)
+========================= */
+export const getPendingParentApprovalsForTeacherService = async ({
+  school_id,
+  user,
+  query,
+}) => {
+  const scopedSchoolId = resolveSchoolId(school_id, user);
+  const { limit, offset } = getPagination(query);
+  const safeQuery = query || {};
+  const { from_date, to_date } = safeQuery;
+
+  const resolvedTeacherId = user?.teacher_id ?? (await resolveTeacherId(user));
+  if (!resolvedTeacherId) {
+    return { count: 0, rows: [] };
+  }
+
+  const classTeacherAssignments = await TeacherAssignment.findAll({
+    where: {
+      school_id: scopedSchoolId,
+      teacher_id: resolvedTeacherId,
+      is_class_teacher: true,
+      is_active: true,
+    },
+    attributes: ["section_id"],
+  });
+
+  if (!classTeacherAssignments.length) {
+    return { count: 0, rows: [] };
+  }
+
+  const allowedSectionIds = [
+    ...new Set(classTeacherAssignments.map((a) => a.section_id).filter(Boolean)),
+  ];
+  if (!allowedSectionIds.length) {
+    return { count: 0, rows: [] };
+  }
+
+  const where = {
+    approval_status: "pending",
+  };
+
+  if (from_date || to_date) {
+    where.created_at = {};
+    if (from_date) where.created_at[Op.gte] = new Date(from_date);
+    if (to_date) where.created_at[Op.lte] = new Date(to_date);
+  }
+
+  return Parent.findAndCountAll({
+    where,
+    include: [
+      {
+        model: User,
+        required: true,
+        where: { school_id: scopedSchoolId },
+        attributes: ["id", "name", "username", "email", "phone"],
+      },
+      {
+        model: Student,
+        required: true,
+        where: { school_id: scopedSchoolId, section_id: { [Op.in]: allowedSectionIds } },
+        include: [
+          { model: User, attributes: ["id", "name", "username"] },
+          { model: Class, attributes: ["id", "class_name"] },
+          { model: Section, attributes: ["id", "name"] },
+        ],
+      },
+    ],
+    limit,
+    offset,
+    distinct: true,
+    order: [["created_at", "DESC"]],
   });
 };
 
@@ -255,24 +337,20 @@ export const processApprovalAction = async ({
       const assignmentWhere = {
         school_id: user.school_id,
         teacher_id: resolvedTeacherId,
+        is_class_teacher: true,
         is_active: true,
       };
 
-      const scopeFilters = [];
-      if (sectionId) scopeFilters.push({ section_id: sectionId });
-      if (classId) scopeFilters.push({ class_id: classId });
-      if (scopeFilters.length === 1) {
-        Object.assign(assignmentWhere, scopeFilters[0]);
-      } else if (scopeFilters.length > 1) {
-        assignmentWhere[Op.or] = scopeFilters;
-      }
+      // Class teacher is defined at section level; fallback to class only if needed.
+      if (sectionId) assignmentWhere.section_id = sectionId;
+      else if (classId) assignmentWhere.class_id = classId;
 
-      const hasAssignment = await TeacherAssignment.findOne({
+      const hasClassTeacherAssignment = await TeacherAssignment.findOne({
         where: assignmentWhere,
       });
 
-      if (!hasAssignment) {
-        throw new AppError("Only assigned teachers can approve this student", 403);
+      if (!hasClassTeacherAssignment) {
+        throw new AppError("Only class teacher can approve this student", 403);
       }
     }
 

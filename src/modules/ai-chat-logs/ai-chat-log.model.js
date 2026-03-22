@@ -41,7 +41,15 @@ const AiChatLog = db.define(
     },
 
     ai_type: {
-      type: DataTypes.ENUM("rag", "chat", "quiz", "homework", "summary"),
+      type: DataTypes.ENUM(
+        "rag",
+        "chat",
+        "quiz",
+        "homework",
+        "summary",
+        "question_paper",
+        "lesson_summary"
+      ),
       allowNull: false,
       defaultValue: "chat",
     },

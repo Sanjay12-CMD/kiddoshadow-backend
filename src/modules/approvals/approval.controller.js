@@ -1,5 +1,6 @@
 import {
   getPendingStudentApprovalsService,
+  getPendingParentApprovalsForTeacherService,
   getPendingTeacherApprovalsService,
   getPendingParentApprovalsService,
 } from "./approval.service.js";
@@ -9,15 +10,31 @@ import {
 ========================= */
 export const getTeacherPendingApprovals = async (req, res, next) => {
   try {
-    const result = await getPendingStudentApprovalsService({
-      user: req.user,
-      class_id: req.query.class_id,
-      query: req.query,
-    });
+    const [students, parents] = await Promise.all([
+      getPendingStudentApprovalsService({
+        user: req.user,
+        class_id: req.query.class_id,
+        query: req.query,
+      }),
+      getPendingParentApprovalsForTeacherService({
+        user: req.user,
+        query: req.query,
+      }),
+    ]);
 
     res.json({
-      total: result.count,
-      items: result.rows,
+      // Backward-compatible shape (existing consumers expecting students only)
+      total: students.count,
+      items: students.rows,
+      // New categorized payload
+      students: {
+        total: students.count,
+        items: students.rows,
+      },
+      parents: {
+        total: parents.count,
+        items: parents.rows,
+      },
     });
   } catch (e) {
     next(e);

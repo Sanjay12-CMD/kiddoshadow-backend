@@ -18,7 +18,7 @@ import { initNotificationSocket } from "./src/socket/notification.socket.js";
 
 
 const app = express();
-const PORT = process.env.PORT || 3002;
+const PORT = process.env.PORT || 3003;
 const ALLOWED_ORIGINS = [
   "http://localhost:5173",
   "http://localhost:5174",
@@ -35,7 +35,7 @@ const ALLOWED_ORIGINS = [
   "http://192.168.1.6:5174/",
   "http://192.168.1.4:5174",
   "http://192.168.1.4:5176",
-  "http://192.168.1.40:5174"
+  "http://192.168.1.34:5174"
 ];
 
 
@@ -128,6 +128,23 @@ import notificationRoutes from "./src/modules/notifications/notification.routes.
 import groupChatRoutes from "./src/modules/group-chat/group-chat.routes.js";
 import gameRoutes from "./src/modules/game/game.routes.js";
 import quizRoutes from "./src/modules/quiz/quiz.routes.js";
+import logicalThinkingRoutes from "./src/modules/logical-thinking/logical-thinking.routes.js";
+import scienceExplorationRoutes from "./src/modules/science-exploration/science-exploration.routes.js";
+import introCodingRoutes from "./src/modules/intro-coding/intro-coding.routes.js";
+import gkBuilderRoutes from "./src/modules/gk-builder/gk-builder.routes.js";
+import gamifiedLearningRoutes from "./src/modules/gamified-learning/gamified-learning.routes.js";
+import codingAIRoutes from "./src/modules/coding-ai/codingAI.routes.js";
+import careerDiscoveryRoutes from "./src/modules/career-discovery/career.routes.js";
+import communicationSkillsRoutes from "./src/modules/communication-skills/communication.routes.js";
+import scienceMathLearningRoutes from "./src/modules/science-math-learning/scienceMath.routes.js";
+import creativeSkillsRoutes from "./src/modules/creative-skills/creative.routes.js";
+import competitiveExamRoutes from "./src/modules/competitive-exam/competitive.routes.js";
+import careerPathRoutes from "./src/modules/career-path/careerPath.routes.js";
+import studyStrategyRoutes from "./src/modules/study-strategy/strategy.routes.js";
+import advancedExamRoutes from "./src/modules/advanced-exams/advancedExam.routes.js";
+import advancedCodingRoutes from "./src/modules/advanced-coding/advancedCoding.routes.js";
+import mentorshipRoutes from "./src/modules/career-mentorship/mentorship.routes.js";
+import entrepreneurshipRoutes from "./src/modules/entrepreneurship/entrepreneurship.routes.js";
 
 import paymentLogRoutes from "./src/modules/payment-logs/payment-log.routes.js";
 import voiceRoutes from "./src/modules/voice-logs/voice.routes.js";
@@ -196,6 +213,23 @@ app.use("/api/notifications", notificationRoutes);
 app.use("/api/group-chat", groupChatRoutes);
 app.use("/api/game", gameRoutes);
 app.use("/api/voice", voiceRoutes);
+app.use("/api/logical-thinking", logicalThinkingRoutes);
+app.use("/api/science-exploration", scienceExplorationRoutes);
+app.use("/api/intro-coding", introCodingRoutes);
+app.use("/api/gk-builder", gkBuilderRoutes);
+app.use("/api/gamified-learning", gamifiedLearningRoutes);
+app.use("/api/coding-ai", codingAIRoutes);
+app.use("/api/career-discovery", careerDiscoveryRoutes);
+app.use("/api/communication-skills", communicationSkillsRoutes);
+app.use("/api/science-math-learning", scienceMathLearningRoutes);
+app.use("/api/creative-skills", creativeSkillsRoutes);
+app.use("/api/competitive-exam", competitiveExamRoutes);
+app.use("/api/career-path", careerPathRoutes);
+app.use("/api/study-strategy", studyStrategyRoutes);
+app.use("/api/advanced-exams", advancedExamRoutes);
+app.use("/api/advanced-coding", advancedCodingRoutes);
+app.use("/api/career-mentorship", mentorshipRoutes);
+app.use("/api/entrepreneurship", entrepreneurshipRoutes);
 
 
 // 404 + ERROR HANDLER

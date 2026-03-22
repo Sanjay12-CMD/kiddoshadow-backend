@@ -52,10 +52,140 @@ function getAllPdfFiles(dir) {
   return results;
 }
 
+function cleanPdfText(value) {
+  return String(value || "")
+    .replace(/[\uD800-\uDFFF]/g, "")
+    .replace(/\0/g, "")
+    .replace(/[ \t]+/g, " ")
+    .trim();
+}
+
+function normalizePathSegment(value) {
+  return String(value || "")
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function extractBookMetadata(filePath, booksDir) {
+  const relativePath = path.relative(booksDir, filePath);
+  const parts = relativePath.split(path.sep).map((part) => normalizePathSegment(part));
+  const fileName = path.basename(filePath);
+  const chapterName = fileName.replace(/\.pdf$/i, "");
+
+  const classIndex = parts.findIndex((part) =>
+    /(?:^|\s)class\s*\d{1,2}\b|(?:^|\s)\d{1,2}(?:st|nd|rd|th)?\s*std\b/i.test(part)
+  );
+
+  const classMatch =
+    classIndex >= 0
+      ? parts[classIndex].match(/class\s*(\d{1,2})|(\d{1,2})(?:st|nd|rd|th)?\s*std/i)
+      : null;
+
+  const className = classMatch?.[1] || classMatch?.[2] || "unknown";
+  const subjectName =
+    classIndex >= 0 && classIndex + 1 < parts.length - 1
+      ? parts[classIndex + 1]
+      : parts.length > 1
+      ? parts[parts.length - 2]
+      : "unknown";
+
+  return {
+    relativePath,
+    className: className.toLowerCase(),
+    subjectName: subjectName.toLowerCase(),
+    fileName,
+    chapterName,
+    safeIdPrefix: relativePath.replace(/[^\w.-]/g, "_"),
+  };
+}
+
+function extractPageText(content) {
+  const rows = [];
+
+  for (const item of content.items || []) {
+    const text = cleanPdfText(item?.str);
+    if (!text) continue;
+
+    const x = Number(item?.transform?.[4] || 0);
+    const y = Number(item?.transform?.[5] || 0);
+
+    let row = rows.find((candidate) => Math.abs(candidate.y - y) <= 2);
+    if (!row) {
+      row = { y, items: [] };
+      rows.push(row);
+    }
+
+    row.items.push({ x, text });
+  }
+
+  return rows
+    .sort((left, right) => right.y - left.y)
+    .map((row) =>
+      row.items
+        .sort((left, right) => left.x - right.x)
+        .map((item) => item.text)
+        .join(" ")
+        .replace(/\s+/g, " ")
+        .trim()
+    )
+    .filter(Boolean)
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function splitPageText(pageText, maxChunkSize = 2200) {
+  const lines = String(pageText || "")
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  if (!lines.length) return [];
+
+  const chunks = [];
+  let current = "";
+  let chunkIndex = 0;
+
+  for (const line of lines) {
+    const candidate = current ? `${current}\n${line}` : line;
+    if (candidate.length <= maxChunkSize || !current) {
+      current = candidate;
+      continue;
+    }
+
+    chunks.push({
+      chunkIndex,
+      text: current.trim(),
+    });
+    chunkIndex += 1;
+    current = line;
+  }
+
+  if (current.trim()) {
+    chunks.push({
+      chunkIndex,
+      text: current.trim(),
+    });
+  }
+
+  return chunks;
+}
+
 // -------- MAIN INGEST FUNCTION --------
 async function ingest() {
   console.log("📚 Starting ingestion...");
   console.log("Books folder:", BOOKS_DIR);
+
+  try {
+    await chroma.deleteCollection({ name: COLLECTION_NAME });
+    console.log(`🧹 Cleared existing ${COLLECTION_NAME} collection to avoid stale book chunks`);
+  } catch (err) {
+    const message = String(err?.message || "");
+    if (!/not\s+found|does not exist/i.test(message)) {
+      console.warn("⚠️ Could not clear existing collection:", message || err);
+    }
+  }
 
   const collection = await chroma.getOrCreateCollection({
     name: COLLECTION_NAME,
@@ -64,26 +194,6 @@ async function ingest() {
   const pdfFiles = getAllPdfFiles(BOOKS_DIR);
   console.log(`Found ${pdfFiles.length} PDF files`);
 
-  const chunkSize = 500;
-  const chunkOverlap = 50;
-
-  const splitText = (text) => {
-    const cleaned = text.replace(/\s+/g, " ").trim();
-    if (!cleaned) return [];
-
-    const chunks = [];
-    let start = 0;
-
-    while (start < cleaned.length) {
-      const end = Math.min(start + chunkSize, cleaned.length);
-      chunks.push(cleaned.slice(start, end));
-      if (end === cleaned.length) break;
-      start = Math.max(0, end - chunkOverlap);
-    }
-
-    return chunks;
-  };
-
   const standardFontDataUrl = `${pathToFileURL(
     path.resolve(process.cwd(), "node_modules/pdfjs-dist/standard_fonts")
   ).toString()}/`;
@@ -91,20 +201,14 @@ async function ingest() {
   for (const filePath of pdfFiles) {
     console.log(`\n📄 Processing: ${filePath}`);
 
-    // ---- Extract metadata from path ----
-    // Example: books/class7/science.pdf
-    // Example: books/class6/english/chapter-1.pdf
-    const parts = filePath.split(path.sep);
-    const classIndex = parts.findIndex((p) => p.toLowerCase().startsWith("class"));
-    const className = classIndex >= 0 ? parts[classIndex] : "unknown";
-    const subjectName =
-      classIndex >= 0 && classIndex + 1 < parts.length - 1
-        ? parts[classIndex + 1]
-        : "unknown";
-    const fileName = path.basename(filePath);
-    const chapterName = fileName.replace(/\.pdf$/i, "");
-    const relativePath = path.relative(BOOKS_DIR, filePath);
-    const safeIdPrefix = relativePath.replace(/[^\w.-]/g, "_");
+    const {
+      relativePath,
+      className,
+      subjectName,
+      fileName,
+      chapterName,
+      safeIdPrefix,
+    } = extractBookMetadata(filePath, BOOKS_DIR);
 
     // ---- Read PDF ----
     let data;
@@ -122,48 +226,33 @@ async function ingest() {
       standardFontDataUrl,
     }).promise;
 
-    let fullText = "";
-
     for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
       const page = await pdf.getPage(pageNum);
       const content = await page.getTextContent();
-      const pageText = content.items
-        .map((item) => item.str)
-        .join(" ")
-        .replace(/\s+/g, " ")
-        .trim();
-      if (pageText) {
-        fullText += `${pageText}\n`;
+
+      const pageText = extractPageText(content);
+      if (!pageText) continue;
+
+      const chunks = splitPageText(pageText);
+
+      for (const chunk of chunks) {
+        await collection.upsert({
+          ids: [`${safeIdPrefix}-p${String(pageNum).padStart(4, "0")}-c${chunk.chunkIndex}`],
+          documents: [chunk.text],
+          metadatas: [
+            {
+              syllabus: "CBSE",
+              class: className,
+              subject: subjectName,
+              book: fileName,
+              chapter: chapterName,
+              source_path: relativePath,
+              page_number: pageNum,
+              chunk_index: chunk.chunkIndex,
+            },
+          ],
+        });
       }
-    }
-
-    if (!fullText.trim()) {
-      console.warn("⚠️ Empty text, skipping:", filePath);
-      continue;
-    }
-
-    // ---- Chunk text ----
-    const chunks = splitText(fullText);
-    console.log(`✂️ Created ${chunks.length} chunks`);
-
-    // ---- Store chunks ----
-    for (let i = 0; i < chunks.length; i++) {
-      const chunkText = chunks[i];
-
-      await collection.upsert({
-        ids: [`${safeIdPrefix}-${i}`],
-        documents: [chunkText],
-        metadatas: [
-          {
-            syllabus: "CBSE",
-            class: className.toLowerCase().replace("class", ""),
-            subject: subjectName.toLowerCase(),
-            book: fileName,
-            chapter: chapterName,
-            source_path: relativePath,
-          },
-        ],
-      });
     }
 
     console.log(`✅ Finished ${fileName}`);

@@ -483,7 +483,7 @@ RAG
 POST `/api/rag/ask`
 Roles: student, teacher, parent
 Query: `voice=true` (optional, returns audio/wav stream)
-Request: `{ "question": "string", "classLevel"?: "string|number", "subject"?: "string" }`
+Request: `{ "question": "string", "classLevel"?: "string|number", "subject"?: "string", "sourcePath"?: "books-relative-pdf-path", "bookPath"?: "books-relative-pdf-path", "currentBook"?: "books-relative-pdf-path", "selectedBook"?: "books-relative-pdf-path", "book"?: "file.pdf", "chapter"?: "chapter-id" }`
 Response (text): `{ "question": "string", "answer": "string", "sources": [ ... ], "source_type"?: "rag|none", "filters_used"?: "class_subject|class|null" }`
 Response (voice): `audio/wav` stream
 
