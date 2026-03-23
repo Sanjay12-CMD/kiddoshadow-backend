@@ -28,7 +28,7 @@ const ALLOWED_ORIGINS = [
   "http://127.0.0.1:5176",
   "https://adminpanel.xtown.in",
   "https://kiddoerp.xtown.in",
-  "https://school.xtown.in",
+  "https://school.xtowns.in",
   "http://192.168.1.16:5173",
   "http://192.168.1.16:5173/",
   "http://192.168.1.6:5174",
