@@ -201,22 +201,6 @@ export async function routeRagQuestion({ question, classLevel, bookScope = null,
   const subjectCategory = detectSubjectCategory({ question, bookScope });
 
   if (subjectCategory !== "equation") {
-    const textContext = await retrieveRagContext({
-      query: question,
-      classLevel,
-      bookScope,
-      allowGlobal: !bookScope,
-    });
-
-    if (!hasBookSupportForQuestion({ question, context: textContext })) {
-      return {
-        answer: BOOK_NOT_PROVIDED_TEXT,
-        sources: [],
-        source_type: "rag_no_match",
-        filters_used: textContext?.filter || "text_router_no_match",
-      };
-    }
-
     const result = await askRag({
       question,
       classLevel,

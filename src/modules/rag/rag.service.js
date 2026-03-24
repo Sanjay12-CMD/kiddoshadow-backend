@@ -46,7 +46,10 @@ const normalizeScopeValue = (value) => {
     return path.relative(BOOKS_DIR, text).replace(/\\/g, "/");
   }
 
-  return text.replace(/^\/+/, "").replace(/^books\//i, "");
+  return text
+    .replace(/^.*?\/books\//i, "")
+    .replace(/^\/+/, "")
+    .replace(/^books\//i, "");
 };
 
 const resolveBookScope = (bookScope) => {
