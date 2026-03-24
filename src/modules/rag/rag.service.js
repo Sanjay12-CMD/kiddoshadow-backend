@@ -475,11 +475,39 @@ const getRootLevelPdfPaths = async () => {
   return files;
 };
 
-const buildPdfCandidates = async ({ question, classLevel }) => {
+const buildPdfCandidates = async ({ question, classLevel, bookScope = null }) => {
   const candidates = new Set();
   const normalizedQuestion = String(question || "").toLowerCase();
   const isHistoryQuery = hasAnyHint(normalizedQuestion, HISTORY_QUERY_HINTS);
   const isPhysicsQuery = hasAnyHint(normalizedQuestion, PHYSICS_QUERY_HINTS);
+  const resolvedScope = resolveBookScope(bookScope);
+
+  if (resolvedScope) {
+    const allFiles = await getPdfPathsForClassLevel(null);
+    const scopedMatches = allFiles.filter((pdfPath) => {
+      const relativePath = path.relative(BOOKS_DIR, pdfPath).replace(/\\/g, "/");
+      const bookName = path.basename(relativePath);
+      const chapterName = path.basename(relativePath, path.extname(relativePath));
+
+      if (resolvedScope.type === "source_path") {
+        return relativePath.toLowerCase() === resolvedScope.value.toLowerCase();
+      }
+
+      if (resolvedScope.type === "book") {
+        return bookName.toLowerCase() === path.basename(resolvedScope.value).toLowerCase();
+      }
+
+      if (resolvedScope.type === "chapter") {
+        return chapterName.toLowerCase() === resolvedScope.value.toLowerCase();
+      }
+
+      return false;
+    });
+
+    if (scopedMatches.length) {
+      return scopedMatches;
+    }
+  }
 
   for (const pdfPath of await getPdfPathsForClassLevel(classLevel)) {
     candidates.add(pdfPath);
@@ -577,8 +605,8 @@ const splitPdfParagraphs = (text) =>
     .map((part) => normalizeBookChunk(part))
     .filter((part) => part.length >= 40);
 
-const findDirectPdfAnswer = async ({ question, classLevel }) => {
-  const candidates = await buildPdfCandidates({ question, classLevel });
+const findDirectPdfAnswer = async ({ question, classLevel, bookScope = null }) => {
+  const candidates = await buildPdfCandidates({ question, classLevel, bookScope });
   if (!candidates.length) return null;
 
   let bestMatch = null;
@@ -1458,13 +1486,35 @@ export async function askRag({ question, classLevel, bookScope = null, userId })
   const hasRelevantContext = hasKeywordMatch || hasGoodVectorMatch;
 
   if (!chunks.length || !hasRelevantContext) {
-    answer = "I don't know based on the provided books.";
-    usedFilter = context.chromaAvailable ? "rag_no_match" : "chroma_unavailable";
-    if (context.chromaAvailable && chunks.length && !hasRelevantContext) {
+    const directPdfAnswer = await findDirectPdfAnswer({
+      question: matchingQuestion,
+      classLevel,
+      bookScope,
+    });
+
+    if (directPdfAnswer?.answer) {
+      answer = directPdfAnswer.answer;
       finalIds = [];
-      finalChunks = [];
-      finalMetadatas = [];
+      finalChunks = [directPdfAnswer.answer];
+      finalMetadatas = [
+        {
+          class: normalizeClassLevel(classLevel),
+          source_path: directPdfAnswer.sourcePath,
+          book: path.basename(directPdfAnswer.sourcePath),
+          chapter: path.basename(directPdfAnswer.sourcePath, path.extname(directPdfAnswer.sourcePath)),
+        },
+      ];
       finalDistances = [];
+      usedFilter = context.chromaAvailable ? "pdf_text_fallback" : "pdf_text_only";
+    } else {
+      answer = "I don't know based on the provided books.";
+      usedFilter = context.chromaAvailable ? "rag_no_match" : "chroma_unavailable";
+      if (context.chromaAvailable && chunks.length && !hasRelevantContext) {
+        finalIds = [];
+        finalChunks = [];
+        finalMetadatas = [];
+        finalDistances = [];
+      }
     }
   }
 
