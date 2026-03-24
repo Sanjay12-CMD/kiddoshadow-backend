@@ -1439,11 +1439,12 @@ export async function askRag({ question, classLevel, bookScope = null, userId })
   const retrievalQuestion = normalizeQuestionForRetrieval(question) || String(question || "").trim();
   const expandedRetrievalQuestion = expandRetrievalTopic(question) || retrievalQuestion;
   const matchingQuestion = expandedRetrievalQuestion || retrievalQuestion || String(question || "").trim();
+  const resolvedScope = resolveBookScope(bookScope);
   const context = await retrieveRagContext({
     query: matchingQuestion,
     classLevel,
     bookScope,
-    allowGlobal: !resolveBookScope(bookScope),
+    allowGlobal: !resolvedScope,
   });
 
   const chunks = context.chunks;
@@ -1484,8 +1485,22 @@ export async function askRag({ question, classLevel, bookScope = null, userId })
       : null;
   const hasGoodVectorMatch = bestDistance != null && bestDistance <= 0.45;
   const hasRelevantContext = hasKeywordMatch || hasGoodVectorMatch;
+  const scopedStrictAnswer =
+    resolvedScope && finalChunks.length
+      ? buildStrictBookAnswer({
+          chunks: finalChunks,
+          ids: finalIds,
+          metadatas: finalMetadatas,
+          question: matchingQuestion,
+        })
+      : null;
 
-  if (!chunks.length || !hasRelevantContext) {
+  if (scopedStrictAnswer && !answer) {
+    answer = scopedStrictAnswer;
+    usedFilter = `${context.filter}_scoped_passage`;
+  }
+
+  if (!answer && (!chunks.length || !hasRelevantContext)) {
     const directPdfAnswer = await findDirectPdfAnswer({
       question: matchingQuestion,
       classLevel,
