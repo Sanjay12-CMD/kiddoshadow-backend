@@ -3,6 +3,12 @@ import Student from "./student.model.js";
 import Class from "../classes/classes.model.js";
 import Section from "../sections/section.model.js";
 import TeacherAssignment from "../teacher-assignments/teacher-assignment.model.js";
+import Parent from "../parents/parent.model.js";
+import Attendance from "../attendance/attendance.model.js";
+import PaymentLog from "../payment-logs/payment-log.model.js";
+import ReportCard from "../report-cards/report-card.model.js";
+import ReportCardMark from "../report-cards/report-card-mark.model.js";
+import GameSessionPlayer from "../game/game-session-player.model.js";
 import AppError from "../../shared/appError.js";
 import { getPagination } from "../../shared/utils/pagination.js";
 import db from "../../config/db.js";
@@ -199,6 +205,119 @@ export const listStudentsForTeacherSectionService = async ({ user, query }) => {
   });
 
   return students;
+};
+
+export const getStudentInsightsService = async ({ student_id, user }) => {
+  const where = { id: student_id };
+
+  if (user?.role !== "super_admin") {
+    where.school_id = user.school_id;
+  }
+
+  const student = await Student.findOne({
+    where,
+    include: [
+      { model: User, attributes: ["id", "name", "phone", "email", "avatar_url", "is_active"] },
+      { model: Class, attributes: ["id", "class_name"] },
+      { model: Section, attributes: ["id", "name"] },
+    ],
+  });
+
+  if (!student) {
+    throw new AppError("Student not found", 404);
+  }
+
+  if (user?.role === "teacher") {
+    const assignment = await TeacherAssignment.findOne({
+      where: {
+        teacher_id: user.teacher_id,
+        school_id: user.school_id,
+        class_id: student.class_id,
+        section_id: student.section_id,
+        is_active: true,
+      },
+    });
+
+    if (!assignment) {
+      throw new AppError("Forbidden", 403);
+    }
+  }
+
+  const parents = await Parent.findAll({
+    where: { student_id: student.id },
+    include: [{ model: User, attributes: ["id", "name", "phone", "email"] }],
+    order: [["created_at", "ASC"]],
+  });
+
+  const latestPayment = await PaymentLog.findOne({
+    where: { student_id: student.id },
+    order: [
+      ["payment_date", "DESC"],
+      ["created_at", "DESC"],
+    ],
+  });
+
+  const reportCardIds = await ReportCard.findAll({
+    where: { student_id: student.id },
+    attributes: ["id"],
+  });
+
+  const attendanceLogs = await Attendance.count({
+    where: { student_id: student.id },
+  });
+
+  const marksEntries = reportCardIds.length
+    ? await ReportCardMark.count({
+        where: { report_card_id: reportCardIds.map((item) => item.id) },
+      })
+    : 0;
+
+  const quizAttempts = await GameSessionPlayer.count({
+    where: { user_id: student.user_id },
+  });
+
+  const primaryParent = parents[0] || null;
+  const parentUser = primaryParent?.user || primaryParent?.User || null;
+  const dueAmount = latestPayment
+    ? Math.max(
+        0,
+        Number(latestPayment.demand_amount || 0) - Number(latestPayment.paid_amount || 0)
+      )
+    : 0;
+
+  return {
+    student: {
+      id: student.id,
+      user_id: student.user_id,
+      name: student.user?.name || null,
+      phone: student.user?.phone || null,
+      email: student.user?.email || null,
+      avatar_url: student.user?.avatar_url || null,
+      admission_no: student.admission_no,
+      roll_no: student.roll_no,
+      class_id: student.class_id,
+      class_name: student.class?.class_name || null,
+      section_id: student.section_id,
+      section_name: student.section?.name || null,
+      is_active: student.is_active,
+    },
+    parent: {
+      relation_type: primaryParent?.relation_type || null,
+      name: parentUser?.name || null,
+      phone: parentUser?.phone || null,
+      email: parentUser?.email || null,
+    },
+    payment: {
+      status: latestPayment?.payment_status || "pending",
+      total_due_amount: dueAmount,
+      last_payment_date: latestPayment?.payment_date || null,
+    },
+    snapshot: {
+      attendance_logs: attendanceLogs,
+      marks_entries: marksEntries,
+      quiz_attempts: quizAttempts,
+    },
+  };
 };
 
 /* =========================

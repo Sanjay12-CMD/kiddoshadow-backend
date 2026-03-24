@@ -9,6 +9,7 @@ import {
   assignStudentsToSectionService,
   listStudentsForTeacherSectionService,
   listStudentOptionsService,
+  getStudentInsightsService,
 } from "./student.service.js";
 import Student from "./student.model.js";
 import User from "../users/user.model.js";
@@ -231,4 +232,13 @@ export const listStudentsForTeacherSection = asyncHandler(async (req, res) => {
     total: result.length,
     items: result,
   });
+});
+
+export const getStudentInsights = asyncHandler(async (req, res) => {
+  const data = await getStudentInsightsService({
+    student_id: Number(req.params.id),
+    user: req.user,
+  });
+
+  res.json(data);
 });

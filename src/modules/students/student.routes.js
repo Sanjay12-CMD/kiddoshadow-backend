@@ -14,6 +14,7 @@ import {
   completeStudentProfile,
   getMyProfile,
   assignStudentsToSection,
+  getStudentInsights,
 } from "./student.controller.js";
 
 import {
@@ -60,6 +61,13 @@ router.get(
     const { listStudentsForTeacherSection } = await import("./student.controller.js");
     return listStudentsForTeacherSection(req, res, next);
   })
+);
+
+router.get(
+  "/:id/insights",
+  protect,
+  allowRoles("school_admin", "teacher", "super_admin"),
+  getStudentInsights
 );
 
 router.get(
