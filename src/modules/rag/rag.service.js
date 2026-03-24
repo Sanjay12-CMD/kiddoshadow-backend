@@ -1473,6 +1473,21 @@ export async function askRag({ question, classLevel, bookScope = null, userId })
     finalDistances = expanded.distances;
   }
 
+  if (resolvedScope && finalChunks.length) {
+    const scopedAnswer =
+      buildStrictBookAnswer({
+        chunks: finalChunks,
+        ids: finalIds,
+        metadatas: finalMetadatas,
+        question: matchingQuestion,
+      }) || mergeChunksWithOverlap(finalChunks.slice(0, 3));
+
+    if (scopedAnswer) {
+      answer = scopedAnswer;
+      usedFilter = `${context.filter}_scoped_chunks`;
+    }
+  }
+
   const hasKeywordMatch = hasStrongKeywordMatch({
     question: matchingQuestion,
     chunks: finalChunks,
@@ -1485,20 +1500,6 @@ export async function askRag({ question, classLevel, bookScope = null, userId })
       : null;
   const hasGoodVectorMatch = bestDistance != null && bestDistance <= 0.45;
   const hasRelevantContext = hasKeywordMatch || hasGoodVectorMatch;
-  const scopedStrictAnswer =
-    resolvedScope && finalChunks.length
-      ? buildStrictBookAnswer({
-          chunks: finalChunks,
-          ids: finalIds,
-          metadatas: finalMetadatas,
-          question: matchingQuestion,
-        })
-      : null;
-
-  if (scopedStrictAnswer && !answer) {
-    answer = scopedStrictAnswer;
-    usedFilter = `${context.filter}_scoped_passage`;
-  }
 
   if (!answer && (!chunks.length || !hasRelevantContext)) {
     const directPdfAnswer = await findDirectPdfAnswer({
