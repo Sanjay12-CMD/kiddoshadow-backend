@@ -11,6 +11,8 @@ import Parent from "../modules/parents/parent.model.js";
 import Student from "../modules/students/student.model.js";
 import TeacherClassSession from "../modules/teacher-class-sessions/teacher-class-session.model.js";
 import TeacherAssignment from "../modules/teacher-assignments/teacher-assignment.model.js";
+import AITestAssignment from "../modules/ai-test-assignments/ai-test-assignment.model.js";
+import AITestSubmission from "../modules/ai-test-assignments/ai-test-submission.model.js";
 
 
 /* ===================== ACADEMICS ===================== */
@@ -147,6 +149,7 @@ const initAssociations = () => {
   Teacher.belongsTo(User, { foreignKey: "user_id" });
   Teacher.hasMany(Class, { foreignKey: "class_teacher_id" });
   Teacher.hasMany(TeacherAssignment, { foreignKey: "teacher_id" });
+  Teacher.hasMany(AITestAssignment, { foreignKey: "teacher_id" });
 
 
   /* ==================== ATTENDANCE ==================== */
@@ -159,6 +162,7 @@ const initAssociations = () => {
 
   // Reverse associations
   Student.hasMany(Attendance, { foreignKey: "student_id" });
+  Student.hasMany(AITestSubmission, { foreignKey: "student_id" });
   TeacherClassSession.hasMany(Attendance, { foreignKey: "teacher_class_session_id" });
 
   /* ==================== CLASS ==================== */
@@ -167,6 +171,7 @@ const initAssociations = () => {
   Class.hasMany(Attendance, { foreignKey: "class_id" });
   Class.hasMany(Section, { foreignKey: "class_id" });
   Class.hasMany(Timetable, { foreignKey: "class_id" });
+  Class.hasMany(AITestAssignment, { foreignKey: "class_id" });
 
   /* ==================== SUBJECT ==================== */
   Subject.belongsTo(School, { foreignKey: "school_id" });
@@ -174,6 +179,7 @@ const initAssociations = () => {
   /* ==================== SECTION ==================== */
   Section.hasMany(Timetable, { foreignKey: "section_id" });
   Section.hasMany(Attendance, { foreignKey: "section_id" });
+  Section.hasMany(AITestAssignment, { foreignKey: "section_id" });
 
   /* ==================== TEACHER ASSIGNMENTS ==================== */
   TeacherAssignment.belongsTo(Teacher, { foreignKey: "teacher_id" });
@@ -183,6 +189,21 @@ const initAssociations = () => {
   TeacherAssignment.hasMany(Timetable, {
     foreignKey: "teacher_assignment_id",
   });
+
+  /* ==================== AI TEST ASSIGNMENTS ==================== */
+  AITestAssignment.belongsTo(School, { foreignKey: "school_id" });
+  AITestAssignment.belongsTo(Teacher, { foreignKey: "teacher_id" });
+  AITestAssignment.belongsTo(Class, { foreignKey: "class_id" });
+  AITestAssignment.belongsTo(Section, { foreignKey: "section_id" });
+  AITestAssignment.belongsTo(Subject, { foreignKey: "subject_id" });
+  AITestAssignment.hasMany(AITestSubmission, {
+    foreignKey: "assignment_id",
+    onDelete: "CASCADE",
+  });
+
+  AITestSubmission.belongsTo(School, { foreignKey: "school_id" });
+  AITestSubmission.belongsTo(AITestAssignment, { foreignKey: "assignment_id" });
+  AITestSubmission.belongsTo(Student, { foreignKey: "student_id" });
 
   /* ==================== TIMETABLE ==================== */
   Timetable.belongsTo(Class, { foreignKey: "class_id" });

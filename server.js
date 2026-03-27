@@ -116,6 +116,7 @@ import attendanceAnalyticsRoutes from "./src/modules/attendance/attendance.analy
 
 import ragRoutes from "./src/modules/rag/rag.routes.js";
 import teacherAiRoutes from "./src/modules/teacher-ai/teacher-ai.routes.js";
+import aiTestAssignmentRoutes from "./src/modules/ai-test-assignments/ai-test-assignment.routes.js";
 import aiAnalyticsRoutes from "./src/modules/ai-analytics/ai-analytics.routes.js";
 import subscriptionRoutes from "./src/modules/subscriptions/subscription.routes.js";
 import tokenRoutes from "./src/modules/tokens/token.routes.js";
@@ -199,6 +200,7 @@ app.use("/api", tokenRoutes);
 // AI
 app.use("/api/rag", ragRoutes);
 app.use("/api", teacherAiRoutes);
+app.use("/api", aiTestAssignmentRoutes);
 app.use("/api", aiAnalyticsRoutes);
 
 // quiz

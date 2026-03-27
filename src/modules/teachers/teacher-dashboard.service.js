@@ -9,6 +9,8 @@ import TeacherAssignment from "../teacher-assignments/teacher-assignment.model.j
 import TokenAccount from "../tokens/token-account.model.js";
 import { ensureTokenAccount } from "../tokens/token.service.js";
 import AiChatLog from "../ai-chat-logs/ai-chat-log.model.js";
+import AITestAssignment from "../ai-test-assignments/ai-test-assignment.model.js";
+import AITestSubmission from "../ai-test-assignments/ai-test-submission.model.js";
 
 const getToday = () => new Date().toISOString().slice(0, 10);
 const getDayName = () =>
@@ -148,11 +150,42 @@ export const getTeacherDashboardService = async ({
   const remaining = tokenAccount?.balance ?? 0;
   const total = used + remaining;
 
+  const assignedTests = await AITestAssignment.findAll({
+    where: {
+      school_id,
+      teacher_id: teacherIds.filter(Boolean),
+      is_active: true,
+    },
+    include: [{ model: AITestSubmission, attributes: ["id", "status", "percentage"] }],
+    order: [["created_at", "DESC"]],
+    limit: 5,
+  });
+
+  const allSubmissions = assignedTests.flatMap((item) => item.ai_test_submissions || []);
+  const reviewedSubmissions = allSubmissions.filter(
+    (item) => item.percentage !== null && item.percentage !== undefined
+  );
+  const classAverage = reviewedSubmissions.length
+    ? Number(
+        (
+          reviewedSubmissions.reduce((sum, item) => sum + Number(item.percentage || 0), 0) /
+          reviewedSubmissions.length
+        ).toFixed(2)
+      )
+    : 0;
+
   return {
     classes,
     timetable,
     homework_summary: homeworkSummary,
     pending_report_cards: pendingReportCards,
     ai_tokens: { total, used, remaining },
+    assigned_tests: {
+      total: assignedTests.length,
+      attempted: allSubmissions.filter((item) => item.status === "completed").length,
+      pending: allSubmissions.filter((item) => item.status === "pending").length,
+      missed: allSubmissions.filter((item) => item.status === "missed").length,
+      class_average_percentage: classAverage,
+    },
   };
 };
