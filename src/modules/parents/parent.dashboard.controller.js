@@ -3,6 +3,7 @@ import { getParentDailyDashboardService } from "./parent.dashboard.service.js";
 import Parent from "./parent.model.js";
 import Student from "../students/student.model.js";
 import { listNotificationsForUserService } from "../notifications/notification.service.js";
+import { listParentAssignmentResults } from "../ai-test-assignments/ai-test-assignment.service.js";
 
 export const getParentDashboard = asyncHandler(async (req, res) => {
   const [data, links] = await Promise.all([
@@ -30,10 +31,12 @@ export const getParentDashboard = asyncHandler(async (req, res) => {
     class_ids: classIds,
     section_ids: sectionIds,
   });
+  const assignedTests = await listParentAssignmentResults({ user: req.user });
 
   res.json({
     success: true,
     data,
+    assigned_tests: assignedTests.slice(0, 10),
     notifications: {
       total: notificationResult.count,
       items: notificationResult.rows.map((row) => {

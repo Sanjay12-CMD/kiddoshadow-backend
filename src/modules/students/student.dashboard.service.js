@@ -8,6 +8,8 @@ import { Op } from "sequelize";
 import TokenAccount from "../tokens/token-account.model.js";
 import { ensureTokenAccount } from "../tokens/token.service.js";
 import AiChatLog from "../ai-chat-logs/ai-chat-log.model.js";
+import AITestSubmission from "../ai-test-assignments/ai-test-submission.model.js";
+import AITestAssignment from "../ai-test-assignments/ai-test-assignment.model.js";
 
 export const getStudentDashboardService = async ({ student_user_id }) => {
     const student = await Student.findOne({
@@ -60,6 +62,23 @@ export const getStudentDashboardService = async ({ student_user_id }) => {
         remaining
     };
 
+    const assignedTests = await AITestSubmission.findAll({
+        where: {
+            school_id: student.school_id,
+            student_id: student.id,
+        },
+        include: [{
+            model: AITestAssignment,
+            where: { is_active: true },
+            attributes: ["id", "title", "lock_mode", "start_time", "end_time", "result_visibility"],
+        }],
+        order: [["created_at", "DESC"]],
+        limit: 5,
+    });
+
+    const newAssignedCount = assignedTests.filter((item) => item.status === "pending").length;
+    const completedCount = assignedTests.filter((item) => item.status === "completed").length;
+
     return {
         student: {
             id: student.id,
@@ -76,7 +95,23 @@ export const getStudentDashboardService = async ({ student_user_id }) => {
             },
             ai_tokens: aiTokens,
             homework_pending: pendingHomeworkCount,
-            unread_notifications: 0 // Placeholder
-        }
+            unread_notifications: 0,
+            assigned_tests: {
+                total: assignedTests.length,
+                new_count: newAssignedCount,
+                completed: completedCount,
+                pending: assignedTests.length - completedCount,
+                latest: assignedTests.map((item) => ({
+                    id: item.assignment_id,
+                    title: item.ai_test_assignment?.title || "Assigned Test",
+                    status: item.status,
+                    lock_mode: Boolean(item.ai_test_assignment?.lock_mode),
+                })),
+            }
+        },
+        notifications: {
+            new_assigned_test: newAssignedCount > 0,
+            message: newAssignedCount > 0 ? `${newAssignedCount} new test assigned` : "",
+        },
     };
 };
