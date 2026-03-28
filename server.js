@@ -150,7 +150,6 @@ import paymentLogRoutes from "./src/modules/payment-logs/payment-log.routes.js";
 import voiceRoutes from "./src/modules/voice-logs/voice.routes.js";
 
 
-
 // auth
 app.use("/api/auth", authRoutes);
 
@@ -159,7 +158,7 @@ app.use("/api", attendanceSummaryRoutes);
 app.use("/api", attendanceAnalyticsRoutes);
 // backward-compatible prefix for attendance routes
 app.use("/api/attendance", attendanceSummaryRoutes);
-app.use("/api/attendance", attendanceAnalyticsRoutes);
+import studentTestRoutes from "./student-tests.routes.js";import studentTestRoutes from "./student-tests.routes.js";app.use("/api/attendance", attendanceAnalyticsRoutes);
 
 // core
 app.use("/api/schools", schoolRoutes);
@@ -230,6 +229,7 @@ app.use("/api/advanced-exams", advancedExamRoutes);
 app.use("/api/advanced-coding", advancedCodingRoutes);
 app.use("/api/career-mentorship", mentorshipRoutes);
 app.use("/api/entrepreneurship", entrepreneurshipRoutes);
+app.use("/api", studentTestRoutes);
 
 
 // 404 + ERROR HANDLER
@@ -254,3 +254,4 @@ try {
   console.error("DB connection failed", err);
   process.exit(1);
 }
+

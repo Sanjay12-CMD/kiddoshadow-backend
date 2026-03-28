@@ -30,4 +30,11 @@ router.post(
   generateLessonSummary
 );
 
+router.post(
+  "/teacher/ai-tests",
+  protect,
+  allowRoles("teacher"),
+  generateQuestionPaper
+);
+
 export default router;
