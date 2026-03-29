@@ -66,6 +66,7 @@ export const submitAssignedTest = asyncHandler(async (req, res) => {
     user: req.user,
     assignmentId: Number(req.params.id),
     answers: req.body?.answers,
+    autoSubmit: Boolean(req.body?.auto_submit),
   });
   res.json({ success: true, data });
 });

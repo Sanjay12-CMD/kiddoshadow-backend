@@ -12,6 +12,7 @@ import GameSessionPlayer from "../game/game-session-player.model.js";
 import AppError from "../../shared/appError.js";
 import { getPagination } from "../../shared/utils/pagination.js";
 import db from "../../config/db.js";
+import { getStudentPersonalizedInsights } from "../ai-analytics/ai-analytics.service.js";
 
 /* =========================
    ADMIN:  CREATE STDUENT
@@ -275,6 +276,11 @@ export const getStudentInsightsService = async ({ student_id, user }) => {
   const quizAttempts = await GameSessionPlayer.count({
     where: { user_id: student.user_id },
   });
+  const personalizedInsights = await getStudentPersonalizedInsights({
+    studentUserId: student.user_id,
+    studentId: student.id,
+    schoolId: student.school_id,
+  });
 
   const primaryParent = parents[0] || null;
   const parentUser = primaryParent?.user || primaryParent?.User || null;
@@ -316,7 +322,10 @@ export const getStudentInsightsService = async ({ student_id, user }) => {
       attendance_logs: attendanceLogs,
       marks_entries: marksEntries,
       quiz_attempts: quizAttempts,
+      ai_tests_completed: personalizedInsights?.ai_test_summary?.total_attempted || 0,
+      ai_test_average_percentage: personalizedInsights?.ai_test_summary?.average_percentage || 0,
     },
+    personalized_insights: personalizedInsights,
   };
 };
 

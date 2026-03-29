@@ -5,6 +5,7 @@ import {
   getSchoolClassUsage,
   getTeacherAnalytics,
   getStudentDailyUsage,
+  getStudentPersonalizedInsights,
 } from "./ai-analytics.service.js";
 
 /* ===================== SCHOOL ===================== */
@@ -52,5 +53,15 @@ export const studentAiAnalytics = asyncHandler(async (req, res) => {
   const studentUserId = req.user.id;
 
   const data = await getStudentDailyUsage(studentUserId);
+  res.json(data);
+});
+
+export const studentAiInsights = asyncHandler(async (req, res) => {
+  const data = await getStudentPersonalizedInsights({
+    studentUserId: req.user.id,
+    studentId: req.user.student_id,
+    schoolId: req.user.school_id,
+  });
+
   res.json(data);
 });

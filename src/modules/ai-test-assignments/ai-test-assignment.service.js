@@ -207,6 +207,13 @@ function formatTimeTaken(seconds) {
   return `${mins}m ${secs}s`;
 }
 
+function formatSubmissionDate(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toISOString();
+}
+
 function calculateAttemptStatus(assignment, submission) {
   const now = getNow();
   const startTime = assignment.start_time ? new Date(assignment.start_time) : null;
@@ -272,10 +279,12 @@ function buildUnifiedResult({ assignment, submission, student, role }) {
     class_section: [className, sectionName].filter(Boolean).join("-"),
     test_title: assignment.title,
     subject: assignment.subject_name || assignment?.subject?.name || "General",
+    chapter_name: assignment.chapter_name || "",
     score,
     max_score: maxScore,
     score_display: visible && maxScore ? `${score}/${maxScore}` : null,
     percentage,
+    submitted_at: formatSubmissionDate(submission.submitted_at),
     time_taken_seconds: submission.time_taken_seconds || 0,
     time_taken_label: formatTimeTaken(submission.time_taken_seconds || 0),
     attempt_status: status,
@@ -472,7 +481,7 @@ export async function createAssignedTest({ user, payload }) {
         start_time: toDateOrNull(payload.start_time),
         end_time: toDateOrNull(payload.end_time),
         has_time_limit: Boolean(payload.has_time_limit),
-        lock_mode: Boolean(payload.lock_mode),
+        lock_mode: true,
         allow_retry: Boolean(payload.allow_retry),
         result_visibility: payload.result_visibility || "immediate",
         assigned_scope: assignFullClass ? "full_class" : "selected_students",
@@ -786,7 +795,7 @@ export async function startStudentAssignment({ user, assignmentId }) {
   return getStudentAssignmentDetail({ user, assignmentId });
 }
 
-export async function submitStudentAssignment({ user, assignmentId, answers }) {
+export async function submitStudentAssignment({ user, assignmentId, answers, autoSubmit = false }) {
   const detail = await getStudentAssignmentDetail({ user, assignmentId });
   const assignment = detail.assignment;
   const submission = await AITestSubmission.findByPk(detail.submission.id);
@@ -797,24 +806,28 @@ export async function submitStudentAssignment({ user, assignmentId, answers }) {
   const answerMap = new Map(
     toArray(answers).map((item) => [Number(item?.id), String(item?.answer || "").trim()])
   );
+  const normalizedAnswers = questions.map((question) => ({
+    id: Number(question.id),
+    answer: answerMap.get(Number(question.id)) || "",
+  }));
   const missingQuestions = questions.filter((question) => !answerMap.get(Number(question.id)));
 
   if (detail.result.attempt_status === "missed") throw new AppError("This test has expired", 400);
-  if (missingQuestions.length) {
+  if (!autoSubmit && missingQuestions.length) {
     throw new AppError(
       `All questions are required before submitting. Missing: ${missingQuestions.map((item) => `Q${item.id}`).join(", ")}`,
       400
     );
   }
 
-  const evaluation = await evaluateSubmissionWithAI({ assignment, answers });
+  const evaluation = await evaluateSubmissionWithAI({ assignment, answers: normalizedAnswers });
 
   await submission.update({
     status: "completed",
     started_at: submission.started_at || now,
     submitted_at: now,
     time_taken_seconds: timeTakenSeconds,
-    answers: toArray(answers),
+    answers: normalizedAnswers,
     score: evaluation.score,
     percentage: evaluation.percentage,
     correct_answers: evaluation.correct_answers,

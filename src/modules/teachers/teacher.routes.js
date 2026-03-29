@@ -5,6 +5,7 @@ import { validate } from "../../shared/middlewares/validate.js";
 
 import {
   createTeacher,
+  getTeacherStudentReports,
   listTeachers,
   listTeachersBySection,
   listTeacherOptions,
@@ -29,6 +30,12 @@ router.post(
 );
 
 router.get("/me", protect, getMyProfile);
+router.get(
+  "/students-reports",
+  protect,
+  allowRoles("teacher"),
+  getTeacherStudentReports
+);
 
 /* admin */
 router.post(

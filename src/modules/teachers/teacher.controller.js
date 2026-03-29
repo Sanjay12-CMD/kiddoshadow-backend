@@ -4,6 +4,7 @@ import AppError from "../../shared/appError.js";
 import db from "../../config/db.js";
 import {
   createTeacherService,
+  getTeacherStudentReportsService,
   listTeachersService,
   listTeachersBySectionService,
   updateTeacherStatusService,
@@ -209,4 +210,9 @@ export const getMyProfile = asyncHandler(async (req, res) => {
     ...user,
     avatar_url: user.avatar_url || "",
   });
+});
+
+export const getTeacherStudentReports = asyncHandler(async (req, res) => {
+  const data = await getTeacherStudentReportsService({ user: req.user });
+  res.json(data);
 });

@@ -247,10 +247,40 @@ function buildQuestionPaperFallback({ payload, chunks }) {
   const chapter = payload?.chapter || payload?.topic || "Topic";
   const marks = Number(payload?.marks || payload?.totalMarks || 20);
   const points = collectFallbackPoints(chunks);
-  const sourceLines =
+  const referenceLines =
     points.length > 0
       ? points.map((line, index) => `${index + 1}. ${line}`).join("\n")
-      : "1. Textbook context was too thin for direct extraction.\n2. Add more chapter text to RAG for richer paper generation.";
+      : [
+          `1. Focus on the main idea, definition, and examples from ${chapter}.`,
+          `2. Ask students to write short and long answers in clear textbook language.`,
+          `3. Include one application-style question connected to ${subject}.`,
+        ].join("\n");
+
+  const objectiveQuestions = [
+    `1. What is ${chapter}? (1 mark)`,
+    `2. Write one important keyword related to ${chapter}. (1 mark)`,
+    `3. State one use or benefit of ${chapter}. (1 mark)`,
+    `4. Fill in the blank: ${chapter} is related to __________. (1 mark)`,
+    `5. Mention one example connected to ${chapter}. (1 mark)`,
+  ];
+
+  const shortQuestions = [
+    `6. Explain ${chapter} in 2-3 lines for Class ${classLevel}. (2 marks)`,
+    `7. Write two key points a student should remember about ${chapter}. (2 marks)`,
+    `8. Differentiate the main idea of ${chapter} from a related concept in ${subject}. (2 marks)`,
+  ];
+
+  const longQuestions = [
+    `9. Write a detailed answer on ${chapter} with explanation and examples. (${Math.max(marks - 11, 4)} marks)`,
+    `10. Describe how ${chapter} is used in classroom or daily-life understanding. (4 marks)`,
+  ];
+
+  const stemQuestions = isStemSubject(subject)
+    ? [
+        `11. Write one formula, rule, or equation connected to ${chapter} and explain each part. (2 marks)`,
+        `12. Solve one simple ${subject} problem based on ${chapter} with steps. (3 marks)`,
+      ]
+    : [];
 
   return `**CBSE Textbook-Based Question Paper**\n
 **Class:** ${classLevel}
@@ -258,12 +288,22 @@ function buildQuestionPaperFallback({ payload, chunks }) {
 **Chapter:** ${chapter}
 **Total Marks:** ${marks}
 
-**Textbook Extraction Status:**
-- Direct chapter question extraction was limited.
-- Review the textbook context below and regenerate if needed.
+**General Instructions:**
+- All questions are compulsory.
+- Answer in clear and simple classroom language.
+- Use chapter keywords wherever possible.
+
+**Section A: Objective Questions**
+${objectiveQuestions.join("\n")}
+
+**Section B: Short Answer**
+${shortQuestions.join("\n")}
+
+**Section C: Long Answer**
+${longQuestions.concat(stemQuestions).join("\n")}
 
 **Teacher Reference Points**
-${sourceLines}`;
+${referenceLines}`;
 }
 
 function buildLessonSummaryFallback({ payload, chunks }) {
