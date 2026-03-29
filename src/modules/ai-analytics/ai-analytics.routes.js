@@ -7,6 +7,7 @@ import {
   schoolClassUsage,
   teacherAiAnalytics,
   studentAiAnalytics,
+  studentAiInsights,
 } from "./ai-analytics.controller.js";
 
 const router = express.Router();
@@ -49,6 +50,13 @@ router.get(
   protect,
   allowRoles("student"),
   studentAiAnalytics
+);
+
+router.get(
+  "/analytics/ai/student/insights",
+  protect,
+  allowRoles("student"),
+  studentAiInsights
 );
 
 export default router;

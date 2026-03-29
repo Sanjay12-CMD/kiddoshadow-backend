@@ -6,6 +6,10 @@ import Class from "../classes/classes.model.js";
 import Section from "../sections/section.model.js";
 import AppError from "../../shared/appError.js";
 import { getPagination } from "../../shared/utils/pagination.js";
+import Student from "../students/student.model.js";
+import Attendance from "../attendance/attendance.model.js";
+import AITestSubmission from "../ai-test-assignments/ai-test-submission.model.js";
+import AITestAssignment from "../ai-test-assignments/ai-test-assignment.model.js";
 
 /* =========================
    ADMIN: CREATE TEACHER
@@ -212,4 +216,198 @@ export const updateTeacherStatusService = async ({
   );
 
   return teacher;
+};
+
+export const getTeacherStudentReportsService = async ({ user }) => {
+  const assignments = await TeacherAssignment.findAll({
+    where: {
+      school_id: user.school_id,
+      teacher_id: user.teacher_id,
+      is_active: true,
+    },
+    include: [
+      { model: Class, attributes: ["id", "class_name"] },
+      { model: Section, attributes: ["id", "name"] },
+    ],
+    order: [["created_at", "DESC"]],
+  });
+
+  const scopePairs = Array.from(
+    new Map(
+      assignments.map((assignment) => [
+        `${assignment.class_id}-${assignment.section_id}`,
+        {
+          class_id: assignment.class_id,
+          section_id: assignment.section_id,
+        },
+      ])
+    ).values()
+  );
+
+  if (!scopePairs.length) {
+    return { assignments: [], students: [], analytics: [] };
+  }
+
+  const students = await Student.findAll({
+    where: {
+      school_id: user.school_id,
+      is_active: true,
+    },
+    include: [
+      { model: User, attributes: ["id", "name", "username"] },
+      { model: Class, attributes: ["id", "class_name"] },
+      { model: Section, attributes: ["id", "name"] },
+    ],
+    order: [[User, "name", "ASC"]],
+  });
+
+  const filteredStudents = students.filter((student) =>
+    scopePairs.some(
+      (scope) =>
+        Number(scope.class_id) === Number(student.class_id) &&
+        Number(scope.section_id) === Number(student.section_id)
+    )
+  );
+
+  const studentIds = filteredStudents.map((student) => student.id);
+  if (!studentIds.length) {
+    return { assignments, students: filteredStudents, analytics: [] };
+  }
+
+  const [attendanceRows, aiTestRows] = await Promise.all([
+    Attendance.findAll({
+      where: {
+        student_id: studentIds,
+      },
+      attributes: ["student_id", "status"],
+      raw: true,
+    }),
+    AITestSubmission.findAll({
+      where: {
+        school_id: user.school_id,
+        student_id: studentIds,
+      },
+      include: [
+        {
+          model: AITestAssignment,
+          where: {
+            teacher_id: user.teacher_id,
+            is_active: true,
+          },
+          attributes: [
+            "id",
+            "title",
+            "subject_name",
+            "chapter_name",
+            "class_id",
+            "section_id",
+            "created_at",
+            "max_score",
+          ],
+        },
+      ],
+      order: [["updated_at", "DESC"]],
+    }),
+  ]);
+
+  const attendanceMap = new Map();
+  attendanceRows.forEach((row) => {
+    const key = Number(row.student_id);
+    const current = attendanceMap.get(key) || { total: 0, present: 0 };
+    current.total += 1;
+    if (String(row.status || "").toLowerCase() === "present") {
+      current.present += 1;
+    }
+    attendanceMap.set(key, current);
+  });
+
+  const testsByStudent = new Map();
+  aiTestRows.forEach((row) => {
+    const studentId = Number(row.student_id);
+    const bucket = testsByStudent.get(studentId) || [];
+    bucket.push(row);
+    testsByStudent.set(studentId, bucket);
+  });
+
+  const analytics = filteredStudents.map((student) => {
+    const history = (testsByStudent.get(Number(student.id)) || [])
+      .filter((row) => row.ai_test_assignment)
+      .map((row) => {
+        const test = row.ai_test_assignment;
+        const subject = test.subject_name || "General";
+        const score = Number(row.score || 0);
+        const maxScore = Number(test.max_score || 0);
+        return {
+          subject,
+          topic: test.chapter_name || test.title || "Assessment",
+          score,
+          max_score: maxScore,
+          marks: Number(row.percentage || 0),
+          score_label: maxScore ? `${score}/${maxScore}` : `${score}`,
+          date: row.submitted_at || row.updated_at || test.created_at,
+          test_title: test.title,
+          strongTopics: Array.isArray(row.strong_topics)
+            ? row.strong_topics.map((topic) => ({ topic, score: Number(row.percentage || 0) }))
+            : [],
+          weakTopics: Array.isArray(row.weak_topics)
+            ? row.weak_topics.map((topic) => ({ topic, score: Number(row.percentage || 0) }))
+            : [],
+        };
+      });
+
+    const groupedSubjects = Array.from(
+      history.reduce((map, item) => {
+        const key = item.subject;
+        const current = map.get(key) || [];
+        current.push(item);
+        map.set(key, current);
+        return map;
+      }, new Map()).entries()
+    ).map(([subject, items]) => {
+      const average = items.length
+        ? Math.round(items.reduce((sum, item) => sum + Number(item.marks || 0), 0) / items.length)
+        : 0;
+      return {
+        subject,
+        marks: average,
+        strongTopics: items.flatMap((item) => item.strongTopics || []).slice(0, 4),
+        weakTopics: items.flatMap((item) => item.weakTopics || []).slice(0, 4),
+      };
+    });
+
+    const overallAverage = groupedSubjects.length
+      ? Math.round(groupedSubjects.reduce((sum, item) => sum + Number(item.marks || 0), 0) / groupedSubjects.length)
+      : 0;
+
+    const attendance = attendanceMap.get(Number(student.id));
+    const attendancePct = attendance?.total ? Math.round((attendance.present / attendance.total) * 100) : 0;
+    const weakSubjects = groupedSubjects.filter((item) => item.marks < 40);
+    const strongSubjects = groupedSubjects.filter((item) => item.marks >= 75);
+    const weakTopics = groupedSubjects.flatMap((item) =>
+      (item.weakTopics || []).map((topic) => ({ ...topic, subject: item.subject }))
+    );
+
+    return {
+      studentId: Number(student.id),
+      name: student.User?.name || student.User?.username || `Student ${student.id}`,
+      username: student.User?.username || student.admission_no || `STU-${student.id}`,
+      className: student.Class?.class_name || "",
+      sectionName: student.Section?.name || "",
+      overallAverage,
+      attendancePct,
+      subjectSummaries: groupedSubjects,
+      weakSubjects,
+      strongSubjects,
+      weakTopics,
+      assessmentHistory: history.sort((a, b) => new Date(b.date) - new Date(a.date)),
+      badge: overallAverage >= 85 ? "Top Performer" : overallAverage < 40 || attendancePct < 75 ? "Needs Improvement" : null,
+      source: "server",
+    };
+  });
+
+  return {
+    assignments,
+    students: filteredStudents,
+    analytics,
+  };
 };
