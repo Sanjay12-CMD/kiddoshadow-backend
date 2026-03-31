@@ -2,6 +2,15 @@ import asyncHandler from "../../shared/asyncHandler.js";
 import { runTeacherAI } from "./teacher-ai.service.js";
 import AppError from "../../shared/appError.js";
 
+function hasImagePayload(payload = {}) {
+  if (payload?.image_data || payload?.imageData || payload?.photo_data || payload?.photoData) {
+    return true;
+  }
+
+  const pages = payload?.image_pages || payload?.imagePages || payload?.photo_pages || payload?.photoPages;
+  return Array.isArray(pages) && pages.length > 0;
+}
+
 function normalizeAiType(input) {
   const raw = String(input || "")
     .trim()
@@ -55,8 +64,8 @@ export const generateQuestionPaper = asyncHandler(async (req, res) => {
   if (!payload?.classLevel) {
     throw new AppError("classLevel is required", 400);
   }
-  if (!payload?.chapter && !payload?.topic) {
-    throw new AppError("chapter or topic is required", 400);
+  if (!payload?.chapter && !payload?.topic && !hasImagePayload(payload)) {
+    throw new AppError("chapter, topic, or captured image is required", 400);
   }
 
   const result = await runTeacherAI({
@@ -76,8 +85,8 @@ export const generateLessonSummary = asyncHandler(async (req, res) => {
   if (!payload?.classLevel) {
     throw new AppError("classLevel is required", 400);
   }
-  if (!payload?.topic) {
-    throw new AppError("topic is required", 400);
+  if (!payload?.topic && !hasImagePayload(payload)) {
+    throw new AppError("topic or captured image is required", 400);
   }
 
   const result = await runTeacherAI({

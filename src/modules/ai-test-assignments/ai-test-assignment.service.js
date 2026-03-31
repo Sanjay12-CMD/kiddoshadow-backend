@@ -36,6 +36,16 @@ function clampNumber(value, min, max) {
   return Math.min(max, Math.max(min, num));
 }
 
+function buildPersistedGeneratedMeta(meta = {}) {
+  const safeMeta = typeof meta === "object" && meta !== null ? meta : {};
+  return {
+    source_type: safeMeta.source_type || null,
+    sources: toArray(safeMeta.sources).slice(0, 10),
+    filters_used: safeMeta.filters_used || null,
+    image_used: Boolean(safeMeta.image_used),
+  };
+}
+
 function getNow() {
   return new Date();
 }
@@ -474,7 +484,7 @@ export async function createAssignedTest({ user, payload }) {
         subject_name: payload.subject || subject?.name || "General",
         chapter_name: payload.chapter || payload.topic || "",
         generated_content: payload.generated_content,
-        generated_meta: payload.generated_meta || null,
+        generated_meta: buildPersistedGeneratedMeta(payload.generated_meta),
         total_questions: totalQuestions,
         max_score: maxScore,
         duration_minutes: payload.has_time_limit ? Number(payload.duration_minutes || 0) || null : null,

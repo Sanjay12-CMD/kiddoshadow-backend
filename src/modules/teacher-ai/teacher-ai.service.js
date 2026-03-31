@@ -8,6 +8,7 @@ import { retrieveRagContext, formatRagSources } from "../rag/rag.service.js";
 const MAX_TEACHER_CONTEXT_CHARS = 6000;
 const SENTENCE_MIN = 35;
 const SENTENCE_MAX = 240;
+const MAX_IMAGE_BYTES = 7 * 1024 * 1024;
 const GEMINI_MODEL = (process.env.GEMINI_MODEL || "gemini-2.5-flash-lite").replace(/^models\//, "");
 const ai = process.env.GEMINI_API_KEY ? new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY }) : null;
 const BOOKS_DIR = path.resolve(process.cwd(), "books");
@@ -72,6 +73,105 @@ function sanitizeGeneratedText(text = "") {
     .trim();
 }
 
+function parseImageDataUrl(rawDataUrl, name = null) {
+  const value = String(rawDataUrl || "").trim();
+  if (!value) return null;
+
+  const match = value.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
+  if (!match) {
+    throw new AppError("image_data must be a valid base64 data URL", 400);
+  }
+
+  const mimeType = match[1];
+  const data = match[2];
+  const bytes = Math.floor((data.length * 3) / 4);
+
+  if (bytes > MAX_IMAGE_BYTES) {
+    throw new AppError("Captured image is too large", 400);
+  }
+
+  return {
+    mimeType,
+    data,
+    bytes,
+    name: String(name || "").trim() || null,
+  };
+}
+
+function parseImagePayloads(payload = {}) {
+  const pages = []
+    .concat(payload?.image_pages || payload?.imagePages || [])
+    .concat(payload?.photo_pages || payload?.photoPages || [])
+    .filter(Boolean);
+
+  if (pages.length) {
+    return pages.map((page, index) => {
+      if (typeof page === "string") {
+        return parseImageDataUrl(page, `Captured page ${index + 1}`);
+      }
+
+      return parseImageDataUrl(
+        page?.data || page?.image_data || page?.imageData || page?.photo_data || page?.photoData,
+        page?.name || page?.image_name || page?.imageName || `Captured page ${index + 1}`
+      );
+    });
+  }
+
+  const legacyImage = parseImageDataUrl(
+    payload?.image_data || payload?.imageData || payload?.photo_data || payload?.photoData,
+    payload?.image_name || payload?.imageName || payload?.photo_name || payload?.photoName
+  );
+
+  return legacyImage ? [legacyImage] : [];
+}
+
+function toWholeNumber(value, fallback) {
+  const num = Number(value);
+  if (!Number.isFinite(num) || num < 0) return fallback;
+  return Math.floor(num);
+}
+
+function resolveQuestionPattern(payload = {}) {
+  const pattern = payload?.question_pattern || payload?.questionPattern || {};
+  const oneMarkCount = toWholeNumber(pattern?.one_mark_count ?? pattern?.oneMarkCount ?? payload?.one_mark_count ?? payload?.oneMarkCount, 4);
+  const twoMarkCount = toWholeNumber(pattern?.two_mark_count ?? pattern?.twoMarkCount ?? payload?.two_mark_count ?? payload?.twoMarkCount, 4);
+  const eightMarkCount = toWholeNumber(
+    pattern?.eight_mark_count ?? pattern?.eightMarkCount ?? payload?.eight_mark_count ?? payload?.eightMarkCount,
+    1
+  );
+
+  const sections = [
+    {
+      key: "one_mark",
+      title: "Section A: One Mark Questions",
+      count: oneMarkCount,
+      marksPerQuestion: 1,
+    },
+    {
+      key: "two_mark",
+      title: "Section B: Two Mark Questions",
+      count: twoMarkCount,
+      marksPerQuestion: 2,
+    },
+    {
+      key: "eight_mark",
+      title: "Section C: Eight Mark Questions",
+      count: eightMarkCount,
+      marksPerQuestion: 8,
+    },
+  ];
+
+  return {
+    sections,
+    totalQuestions: sections.reduce((sum, section) => sum + section.count, 0),
+    totalMarks: sections.reduce((sum, section) => sum + section.count * section.marksPerQuestion, 0),
+    summary: sections
+      .filter((section) => section.count > 0)
+      .map((section) => `${section.count} x ${section.marksPerQuestion} mark${section.marksPerQuestion > 1 ? "s" : ""}`)
+      .join(", "),
+  };
+}
+
 function splitIntoSentences(chunks = []) {
   const raw = chunks.join(" ");
   return raw
@@ -127,71 +227,95 @@ function collectTextbookPoints(chunks = []) {
   return uniqueSentences(splitIntoSentences(chunks)).slice(0, 18);
 }
 
-function buildQuestionPaperFromTextbook({ payload, chunks }) {
+function getPointAt(points = [], index = 0, fallback = "the given chapter") {
+  if (!points.length) return fallback;
+  return points[index % points.length];
+}
+
+function buildQuestionSections({ payload, points = [] }) {
   const classLevel = payload?.classLevel || "N/A";
   const subject = payload?.subject || "General";
   const chapter = payload?.chapter || payload?.topic || "Topic";
-  const marks = Number(payload?.marks || payload?.totalMarks || 20);
+  const pattern = resolveQuestionPattern(payload);
+  const stemSubject = isStemSubject(subject);
+  let questionNumber = 1;
+
+  const sectionBlocks = pattern.sections
+    .filter((section) => section.count > 0)
+    .map((section) => {
+      const questions = [];
+
+      for (let index = 0; index < section.count; index += 1) {
+        const sentence = getPointAt(points, questionNumber - 1, `${chapter} is an important concept in ${subject}.`);
+        const topic = extractTopicFromSentence(sentence) || chapter;
+
+        if (section.key === "one_mark") {
+          const variants = [
+            `Define ${topic} from the textbook. (${section.marksPerQuestion} mark)`,
+            `Fill in the blank from the textbook statement: ${createBlankedSentence(sentence)} (${section.marksPerQuestion} mark)`,
+            `Write one key term related to ${topic}. (${section.marksPerQuestion} mark)`,
+            `State one textbook fact about ${topic}. (${section.marksPerQuestion} mark)`,
+          ];
+          questions.push(`${questionNumber}. ${variants[index % variants.length]}`);
+        } else if (section.key === "two_mark") {
+          const variants = [
+            `Explain ${topic} briefly in 2-3 lines using the textbook idea: "${sentence}" (${section.marksPerQuestion} marks)`,
+            `Write any two important points about ${topic} from the chapter. (${section.marksPerQuestion} marks)`,
+            `Differentiate ${topic} from a related concept in ${subject}. (${section.marksPerQuestion} marks)`,
+            `List two uses, functions, or outcomes connected to ${topic}. (${section.marksPerQuestion} marks)`,
+          ];
+          questions.push(`${questionNumber}. ${variants[index % variants.length]}`);
+        } else {
+          const longPrompt = stemSubject
+            ? `Write a detailed answer on ${topic} using textbook points, formulas/steps, and a labelled diagram or worked example wherever relevant. (${section.marksPerQuestion} marks)`
+            : `Write a detailed answer on ${topic} using textbook points, explanation, and suitable examples. (${section.marksPerQuestion} marks)`;
+          questions.push(`${questionNumber}. ${longPrompt}`);
+        }
+
+        questionNumber += 1;
+      }
+
+      return `${section.title}\n${questions.join("\n")}`;
+    });
+
+  return {
+    pattern,
+    text: sectionBlocks.join("\n\n"),
+    teacherReferencePoints: points.slice(0, 8).map((line, index) => `${index + 1}. ${line}`).join("\n"),
+    classLevel,
+    subject,
+    chapter,
+  };
+}
+
+function buildQuestionPaperFromTextbook({ payload, chunks }) {
   const points = collectTextbookPoints(chunks);
 
   if (!points.length) {
     return buildQuestionPaperFallback({ payload, chunks });
   }
-
-  const objectiveBase = points.slice(0, 5);
-  const shortBase = points.slice(5, 8).length ? points.slice(5, 8) : points.slice(0, 3);
-  const longBase = points.slice(8, 10).length ? points.slice(8, 10) : points.slice(0, 2);
-  const stemSubject = isStemSubject(subject);
-
-  const objectiveQuestions = objectiveBase.map((sentence, index) => {
-    const topic = extractTopicFromSentence(sentence);
-    if (index % 2 === 0) {
-      return `${index + 1}. According to the textbook, what is ${topic}? (1 mark)`;
-    }
-    return `${index + 1}. Fill in the blank from the textbook statement: ${createBlankedSentence(sentence)} (1 mark)`;
+  const { pattern, text, teacherReferencePoints, classLevel, subject, chapter } = buildQuestionSections({
+    payload,
+    points,
   });
-
-  const shortQuestions = shortBase.map((sentence, index) => {
-    const topic = extractTopicFromSentence(sentence);
-    return `${index + 6}. Explain ${topic} in 2-3 lines using this textbook idea: "${sentence}" (2 marks)`;
-  });
-
-  const longQuestions = longBase.map((sentence, index) => {
-    const qNo = index + 9;
-    return `${qNo}. Write a detailed answer using the textbook point: "${sentence}" and related chapter evidence. (${index === 0 ? Math.max(marks - 11, 4) : 4} marks)`;
-  });
-
-  const stemQuestions = stemSubject
-    ? [
-        `11. From the textbook, write the important formula/equation related to ${extractTopicFromSentence(points[0] || chapter)} and explain each term. (2 marks)`,
-        `12. Solve one textbook-style application based on ${extractTopicFromSentence(points[1] || chapter)} with proper steps and units. (3 marks)`,
-      ]
-    : [];
-
-  const teacherPoints = points.slice(0, 6).map((line, index) => `${index + 1}. ${line}`).join("\n");
 
   return `**CBSE Textbook-Based Question Paper**\n
 **Class:** ${classLevel}
 **Subject:** ${subject}
 **Chapter:** ${chapter}
-**Total Marks:** ${marks}
+**Total Marks:** ${pattern.totalMarks}
+**Question Pattern:** ${pattern.summary}
 
 **General Instructions:**
 - All questions are compulsory.
 - Answer only from the prescribed textbook content.
 - Use textbook terms, examples, and chapter explanations wherever relevant.
+- Follow the section-wise marks pattern exactly.
 
-**Section A: Objective Questions**
-${objectiveQuestions.join("\n")}
-
-**Section B: Short Answer**
-${shortQuestions.join("\n")}
-
-**Section C: Long Answer**
-${longQuestions.concat(stemQuestions).join("\n")}
+${text}
 
 **Teacher Reference Points**
-${teacherPoints}`;
+${teacherReferencePoints}`;
 }
 
 function buildLessonSummaryFromTextbook({ payload, chunks }) {
@@ -245,7 +369,6 @@ function buildQuestionPaperFallback({ payload, chunks }) {
   const classLevel = payload?.classLevel || "N/A";
   const subject = payload?.subject || "General";
   const chapter = payload?.chapter || payload?.topic || "Topic";
-  const marks = Number(payload?.marks || payload?.totalMarks || 20);
   const points = collectFallbackPoints(chunks);
   const referenceLines =
     points.length > 0
@@ -255,52 +378,32 @@ function buildQuestionPaperFallback({ payload, chunks }) {
           `2. Ask students to write short and long answers in clear textbook language.`,
           `3. Include one application-style question connected to ${subject}.`,
         ].join("\n");
-
-  const objectiveQuestions = [
-    `1. What is ${chapter}? (1 mark)`,
-    `2. Write one important keyword related to ${chapter}. (1 mark)`,
-    `3. State one use or benefit of ${chapter}. (1 mark)`,
-    `4. Fill in the blank: ${chapter} is related to __________. (1 mark)`,
-    `5. Mention one example connected to ${chapter}. (1 mark)`,
-  ];
-
-  const shortQuestions = [
-    `6. Explain ${chapter} in 2-3 lines for Class ${classLevel}. (2 marks)`,
-    `7. Write two key points a student should remember about ${chapter}. (2 marks)`,
-    `8. Differentiate the main idea of ${chapter} from a related concept in ${subject}. (2 marks)`,
-  ];
-
-  const longQuestions = [
-    `9. Write a detailed answer on ${chapter} with explanation and examples. (${Math.max(marks - 11, 4)} marks)`,
-    `10. Describe how ${chapter} is used in classroom or daily-life understanding. (4 marks)`,
-  ];
-
-  const stemQuestions = isStemSubject(subject)
-    ? [
-        `11. Write one formula, rule, or equation connected to ${chapter} and explain each part. (2 marks)`,
-        `12. Solve one simple ${subject} problem based on ${chapter} with steps. (3 marks)`,
-      ]
-    : [];
+  const seedPoints = points.length
+    ? points
+    : [
+        `${chapter} is an important topic in ${subject}.`,
+        `Students should revise the main definition, key points, and examples from ${chapter}.`,
+        `Use clear textbook language while answering questions from ${chapter}.`,
+      ];
+  const { pattern, text } = buildQuestionSections({
+    payload,
+    points: seedPoints,
+  });
 
   return `**CBSE Textbook-Based Question Paper**\n
 **Class:** ${classLevel}
 **Subject:** ${subject}
 **Chapter:** ${chapter}
-**Total Marks:** ${marks}
+**Total Marks:** ${pattern.totalMarks}
+**Question Pattern:** ${pattern.summary}
 
 **General Instructions:**
 - All questions are compulsory.
 - Answer in clear and simple classroom language.
 - Use chapter keywords wherever possible.
+- Follow the section-wise marks pattern exactly.
 
-**Section A: Objective Questions**
-${objectiveQuestions.join("\n")}
-
-**Section B: Short Answer**
-${shortQuestions.join("\n")}
-
-**Section C: Long Answer**
-${longQuestions.concat(stemQuestions).join("\n")}
+${text}
 
 **Teacher Reference Points**
 ${referenceLines}`;
@@ -400,9 +503,12 @@ function formatContextBlock({ chunks = [], metadatas = [] }) {
 function buildTeacherAiGeminiPrompt({ aiType, payload, promptText, chunks, metadatas }) {
   const classLevel = payload?.classLevel || "N/A";
   const subject = payload?.subject || "General";
-  const topic = payload?.topic || payload?.chapter || "Topic";
-  const marks = Number(payload?.marks || payload?.totalMarks || 20);
+  const topic = payload?.topic || payload?.chapter || "Captured worksheet";
+  const pattern = resolveQuestionPattern(payload);
+  const marks = Number(payload?.marks || payload?.totalMarks || pattern.totalMarks || 20);
   const contextText = formatContextBlock({ chunks, metadatas }) || "No textbook context retrieved.";
+  const imageCount = parseImagePayloads(payload).length;
+  const hasImage = imageCount > 0;
 
   if (aiType === "question_paper") {
     return `
@@ -420,15 +526,22 @@ Subject: ${subject}
 Chapter/Topic: ${topic}
 Total Marks: ${marks}
 
+${hasImage ? `Use the attached captured pages as additional primary sources. There are ${imageCount} images. Read all textbook pages / notebook pages / question pages carefully and merge their content into one paper.\n` : ""}
+
 Output rules:
 - Return plain text only.
 - Start with the title "CBSE Textbook-Based Question Paper".
 - Include Class, Subject, Chapter, and Total Marks lines.
+- Include a "Question Pattern" line matching this exact split: ${pattern.summary}.
 - Add "General Instructions".
 - Add three sections exactly named:
-Section A: Objective Questions
-Section B: Short Answer
-Section C: Long Answer
+Section A: One Mark Questions
+Section B: Two Mark Questions
+Section C: Eight Mark Questions
+- Create exactly ${pattern.sections[0].count} one-mark questions in Section A.
+- Create exactly ${pattern.sections[1].count} two-mark questions in Section B.
+- Create exactly ${pattern.sections[2].count} eight-mark questions in Section C.
+- The final paper must total exactly ${pattern.totalMarks} marks.
 - Every question line must begin with a number like "1. ".
 - Include marks on every question line.
 - Keep the paper classroom-ready and distinct from a summary.
@@ -452,6 +565,8 @@ Class: ${classLevel}
 Subject: ${subject}
 Topic: ${topic}
 
+${hasImage ? "Use the attached image as an additional primary source. Read the captured page/notes from the image when building the lesson summary.\n" : ""}
+
 Output rules:
 - Return plain text only.
 - Start with the title "Textbook-Based Lesson Summary".
@@ -471,19 +586,36 @@ ${contextText}
 `;
 }
 
-async function generateTeacherAiWithGemini({ aiType, payload, promptText, chunks, metadatas }) {
-  if (!ai || !chunks.length) return null;
+async function generateTeacherAiWithGemini({ aiType, payload, promptText, chunks, metadatas, imageInput }) {
+  if (!ai || (!chunks.length && !imageInput?.length)) return null;
+
+  const prompt = buildTeacherAiGeminiPrompt({
+    aiType,
+    payload,
+    promptText,
+    chunks,
+    metadatas,
+  });
 
   try {
-    const result = await ai.models.generateContent({
-      model: GEMINI_MODEL,
-      contents: buildTeacherAiGeminiPrompt({
-        aiType,
-        payload,
-        promptText,
-        chunks,
-        metadatas,
-      }),
+      const result = await ai.models.generateContent({
+        model: GEMINI_MODEL,
+        contents: imageInput?.length
+          ? [
+              {
+                role: "user",
+                parts: [
+                  { text: prompt },
+                  ...imageInput.map((image) => ({
+                    inlineData: {
+                      mimeType: image.mimeType,
+                      data: image.data,
+                    },
+                  })),
+                ],
+              },
+            ]
+        : prompt,
     });
 
     const text = sanitizeGeneratedText(extractGeneratedText(result));
@@ -504,7 +636,23 @@ export async function runTeacherAI({ user, aiType, payload }) {
     throw new AppError("Invalid teacher AI task", 400);
   }
 
-  const safePayload = { subject: "General", ...payload };
+  const imageInput = parseImagePayloads(payload || {});
+  const safePayload = {
+    subject: "General",
+    ...payload,
+  };
+  if (!safePayload.topic && !safePayload.chapter && imageInput.length) {
+    safePayload.topic = imageInput[0].name || "Captured worksheet";
+    safePayload.chapter = safePayload.topic;
+  }
+  const questionPattern = resolveQuestionPattern(safePayload);
+  safePayload.marks = Number(safePayload.marks || safePayload.totalMarks || questionPattern.totalMarks || 20);
+  safePayload.totalMarks = safePayload.marks;
+  safePayload.question_pattern = {
+    one_mark_count: questionPattern.sections[0].count,
+    two_mark_count: questionPattern.sections[1].count,
+    eight_mark_count: questionPattern.sections[2].count,
+  };
   const promptText = promptBuilder(safePayload);
 
   const ragQuery = safePayload?.topic || safePayload?.chapter;
@@ -514,10 +662,12 @@ export async function runTeacherAI({ user, aiType, payload }) {
   if (!ragQuery || !hasScope) {
     if (requireRag.has(aiType)) {
       return {
-        text: buildTeacherAiFromTextbook({ aiType, payload: safePayload, chunks: [] }),
+      text: buildTeacherAiFromTextbook({ aiType, payload: safePayload, chunks: [] }),
         source_type: "fallback",
         sources: [],
         filters_used: null,
+        image_used: imageInput.length > 0,
+        image_count: imageInput.length,
       };
     }
   }
@@ -546,6 +696,7 @@ export async function runTeacherAI({ user, aiType, payload }) {
       promptText,
       chunks: trimmedChunks,
       metadatas: context.metadatas || [],
+      imageInput,
     })) ||
     buildTeacherAiFromTextbook({
       aiType,
@@ -557,8 +708,16 @@ export async function runTeacherAI({ user, aiType, payload }) {
 
   return {
     text: finalText,
-    source_type: trimmedChunks.length ? "rag" : "fallback",
+    source_type: imageInput.length
+      ? trimmedChunks.length
+        ? "rag_vision"
+        : "vision"
+      : trimmedChunks.length
+        ? "rag"
+        : "fallback",
     sources: formatRagSources(context.metadatas || []),
     filters_used: context.filter || null,
+    image_used: imageInput.length > 0,
+    image_count: imageInput.length,
   };
 }

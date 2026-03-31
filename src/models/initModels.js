@@ -39,6 +39,7 @@ import PlayerAnswer from "../modules/game/player-answer.model.js";
 /* ===================== AI / LOGS ===================== */
 import AiChatLog from "../modules/ai-chat-logs/ai-chat-log.model.js";
 import VoiceLog from "../modules/voice-logs/voice-log.model.js";
+import AuditLog from "../modules/audit/audit-log.model.js";
 
 /* ===================== TOKENS / BILLING ===================== */
 import Subscription from "../modules/subscriptions/subscription.model.js";
@@ -237,6 +238,8 @@ const initAssociations = () => {
   /* ==================== AI / LOGS ==================== */
   AiChatLog.belongsTo(User, { foreignKey: "user_id" });
   VoiceLog.belongsTo(User, { foreignKey: "user_id" });
+  AuditLog.belongsTo(User, { foreignKey: "performed_by" });
+  User.hasMany(AuditLog, { foreignKey: "performed_by" });
 
 
   /* ==================== HOMEWORK ==================== */

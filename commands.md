@@ -22,7 +22,7 @@ This creates/updates: backend/rag_data/chroma with collection cbse_books.
 
 # install python 
 `pip install chromadb`
-`chroma run --path ./rag_data/chroma --host 0.0.0.0 --port 8000`
+`chroma run --path ./rag_data/chroma --host 0.0.0.0 --port 8001`
 
 
 delete rag-data folder for rebuild from scratch

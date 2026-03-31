@@ -16,6 +16,20 @@ Additional STEM requirements:
 `;
 };
 
+const resolveQuestionPatternText = (questionPattern = {}) => {
+  const oneMarkCount = Number(questionPattern?.one_mark_count ?? questionPattern?.oneMarkCount ?? 4) || 0;
+  const twoMarkCount = Number(questionPattern?.two_mark_count ?? questionPattern?.twoMarkCount ?? 4) || 0;
+  const eightMarkCount = Number(questionPattern?.eight_mark_count ?? questionPattern?.eightMarkCount ?? 1) || 0;
+  const totalMarks = oneMarkCount + twoMarkCount * 2 + eightMarkCount * 8;
+
+  return [
+    `Section A: ${oneMarkCount} questions x 1 mark`,
+    `Section B: ${twoMarkCount} questions x 2 marks`,
+    `Section C: ${eightMarkCount} questions x 8 marks`,
+    `Total Marks: ${totalMarks}`,
+  ].join("\n");
+};
+
 export const PROMPTS = {
   lesson_summary: ({ topic, classLevel, subject }) => `
 You are a school teacher preparing for a class.
@@ -33,7 +47,7 @@ The summary should:
 ${buildStemGuidance(subject)}
 `,
 
-  question_paper: ({ subject, classLevel, chapter, marks }) => `
+  question_paper: ({ subject, classLevel, chapter, marks, question_pattern: questionPattern, questionPattern: camelQuestionPattern }) => `
 Create a CBSE-style question paper for:
 
 Class: ${classLevel}
@@ -45,11 +59,13 @@ Instructions:
 - Follow CBSE exam pattern
 - Include a mix of difficulty levels
 - Include chapter-relevant textbook terminology
+- Follow this exact marks split:
+${resolveQuestionPatternText(questionPattern || camelQuestionPattern)}
 
 Paper structure:
-Section A: MCQs  
-Section B: Short answer questions  
-Section C: Long answer questions  
+Section A: One mark questions
+Section B: Two mark questions
+Section C: Eight mark questions
 
 Clearly mention marks for each question.
 ${buildStemGuidance(subject)}

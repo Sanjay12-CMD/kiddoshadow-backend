@@ -1,9 +1,8 @@
 import fs from "fs";
 import path from "path";
-import { pathToFileURL } from "url";
-import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
 import { ChromaClient } from "chromadb";
 import dotenv from "dotenv";
+import { extractPdfPages } from "./pdfTextExtractor.js";
 
 dotenv.config();
 
@@ -128,41 +127,6 @@ function extractBookMetadata(filePath, booksDir) {
   };
 }
 
-function extractPageText(content) {
-  const rows = [];
-
-  for (const item of content.items || []) {
-    const text = cleanPdfText(item?.str);
-    if (!text) continue;
-
-    const x = Number(item?.transform?.[4] || 0);
-    const y = Number(item?.transform?.[5] || 0);
-
-    let row = rows.find((candidate) => Math.abs(candidate.y - y) <= 2);
-    if (!row) {
-      row = { y, items: [] };
-      rows.push(row);
-    }
-
-    row.items.push({ x, text });
-  }
-
-  return rows
-    .sort((left, right) => right.y - left.y)
-    .map((row) =>
-      row.items
-        .sort((left, right) => left.x - right.x)
-        .map((item) => item.text)
-        .join(" ")
-        .replace(/\s+/g, " ")
-        .trim()
-    )
-    .filter(Boolean)
-    .join("\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-}
-
 function splitPageText(pageText, maxChunkSize = 2200) {
   const lines = String(pageText || "")
     .split(/\n+/)
@@ -227,7 +191,7 @@ async function sourcePathExists(collection, sourcePath) {
   return Array.isArray(existing?.ids) && existing.ids.length > 0;
 }
 
-async function ingestPdfFile({ collection, filePath, standardFontDataUrl }) {
+async function ingestPdfFile({ collection, filePath }) {
   const {
     relativePath,
     className,
@@ -238,24 +202,19 @@ async function ingestPdfFile({ collection, filePath, standardFontDataUrl }) {
   } = extractBookMetadata(filePath, BOOKS_DIR);
 
   const data = new Uint8Array(fs.readFileSync(filePath));
-  const pdf = await pdfjsLib.getDocument({
-    data,
-    standardFontDataUrl,
-  }).promise;
+  const pages = await extractPdfPages(data);
 
   let chunkCount = 0;
 
-  for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-    const page = await pdf.getPage(pageNum);
-    const content = await page.getTextContent();
-    const pageText = extractPageText(content);
+  for (const page of pages) {
+    const pageText = page.text;
     if (!pageText) continue;
 
     const chunks = splitPageText(pageText);
 
     for (const chunk of chunks) {
       await collection.upsert({
-        ids: [`${safeIdPrefix}-p${String(pageNum).padStart(4, "0")}-c${chunk.chunkIndex}`],
+        ids: [`${safeIdPrefix}-p${String(page.pageNumber).padStart(4, "0")}-c${chunk.chunkIndex}`],
         documents: [chunk.text],
         metadatas: [
           {
@@ -265,7 +224,7 @@ async function ingestPdfFile({ collection, filePath, standardFontDataUrl }) {
             book: fileName,
             chapter: chapterName,
             source_path: relativePath,
-            page_number: pageNum,
+            page_number: page.pageNumber,
             chunk_index: chunk.chunkIndex,
           },
         ],
@@ -291,10 +250,6 @@ async function ingestMissingBooks() {
   const collection = await chroma.getOrCreateCollection({
     name: COLLECTION_NAME,
   });
-
-  const standardFontDataUrl = `${pathToFileURL(
-    path.resolve(process.cwd(), "node_modules/pdfjs-dist/standard_fonts")
-  ).toString()}/`;
 
   const stats = {
     requested: missingPdfPaths.length,
@@ -325,7 +280,6 @@ async function ingestMissingBooks() {
       const result = await ingestPdfFile({
         collection,
         filePath,
-        standardFontDataUrl,
       });
 
       stats.processed += 1;

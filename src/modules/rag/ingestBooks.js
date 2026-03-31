@@ -1,17 +1,17 @@
 import fs from "fs";
 import path from "path";
-import { pathToFileURL } from "url";
-import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
 import { ChromaClient } from "chromadb";
 import dotenv from "dotenv";
+import { extractPdfPages } from "./pdfTextExtractor.js";
 
 dotenv.config();
 
 
 
 // -------- CONFIG --------
-const BOOKS_DIR = path.resolve(process.cwd(), process.argv[2]);
-if (!BOOKS_DIR) {
+const booksDirArg = process.argv[2];
+const BOOKS_DIR = path.resolve(process.cwd(), booksDirArg || ".");
+if (!booksDirArg) {
   console.error("❌ Please provide books folder path");
   process.exit(1);
 }
@@ -100,41 +100,6 @@ function extractBookMetadata(filePath, booksDir) {
   };
 }
 
-function extractPageText(content) {
-  const rows = [];
-
-  for (const item of content.items || []) {
-    const text = cleanPdfText(item?.str);
-    if (!text) continue;
-
-    const x = Number(item?.transform?.[4] || 0);
-    const y = Number(item?.transform?.[5] || 0);
-
-    let row = rows.find((candidate) => Math.abs(candidate.y - y) <= 2);
-    if (!row) {
-      row = { y, items: [] };
-      rows.push(row);
-    }
-
-    row.items.push({ x, text });
-  }
-
-  return rows
-    .sort((left, right) => right.y - left.y)
-    .map((row) =>
-      row.items
-        .sort((left, right) => left.x - right.x)
-        .map((item) => item.text)
-        .join(" ")
-        .replace(/\s+/g, " ")
-        .trim()
-    )
-    .filter(Boolean)
-    .join("\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-}
-
 function splitPageText(pageText, maxChunkSize = 2200) {
   const lines = String(pageText || "")
     .split(/\n+/)
@@ -194,10 +159,6 @@ async function ingest() {
   const pdfFiles = getAllPdfFiles(BOOKS_DIR);
   console.log(`Found ${pdfFiles.length} PDF files`);
 
-  const standardFontDataUrl = `${pathToFileURL(
-    path.resolve(process.cwd(), "node_modules/pdfjs-dist/standard_fonts")
-  ).toString()}/`;
-
   for (const filePath of pdfFiles) {
     console.log(`\n📄 Processing: ${filePath}`);
 
@@ -221,23 +182,17 @@ async function ingest() {
       }
       throw err;
     }
-    const pdf = await pdfjsLib.getDocument({
-      data,
-      standardFontDataUrl,
-    }).promise;
+    const pages = await extractPdfPages(data);
 
-    for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-      const page = await pdf.getPage(pageNum);
-      const content = await page.getTextContent();
-
-      const pageText = extractPageText(content);
+    for (const page of pages) {
+      const pageText = page.text;
       if (!pageText) continue;
 
       const chunks = splitPageText(pageText);
 
       for (const chunk of chunks) {
         await collection.upsert({
-          ids: [`${safeIdPrefix}-p${String(pageNum).padStart(4, "0")}-c${chunk.chunkIndex}`],
+          ids: [`${safeIdPrefix}-p${String(page.pageNumber).padStart(4, "0")}-c${chunk.chunkIndex}`],
           documents: [chunk.text],
           metadatas: [
             {
@@ -247,7 +202,7 @@ async function ingest() {
               book: fileName,
               chapter: chapterName,
               source_path: relativePath,
-              page_number: pageNum,
+              page_number: page.pageNumber,
               chunk_index: chunk.chunkIndex,
             },
           ],

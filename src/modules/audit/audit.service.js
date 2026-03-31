@@ -8,7 +8,22 @@ export const listAuditLogsService = async ({ school_id, query }) => {
   const safeQuery = query || {};
   const { entity_type, entity_id, from_date, to_date } = safeQuery;
 
-  const where = {};
+  const schoolUsers = await User.findAll({
+    where: { school_id },
+    attributes: ["id"],
+    raw: true,
+  });
+  const userIds = schoolUsers
+    .map((user) => Number(user?.id))
+    .filter((id) => Number.isFinite(id));
+
+  if (!userIds.length) {
+    return { count: 0, rows: [] };
+  }
+
+  const where = {
+    performed_by: { [Op.in]: userIds },
+  };
 
   if (entity_type) {
     where.entity_type = entity_type;
@@ -26,13 +41,6 @@ export const listAuditLogsService = async ({ school_id, query }) => {
 
   return AuditLog.findAndCountAll({
     where,
-    include: [
-      {
-        model: User,
-        attributes: ["id", "name", "username"],
-        where: { school_id }, // 🔒 multi-tenant safety
-      },
-    ],
     limit,
     offset,
     order: [["created_at", "DESC"]],
