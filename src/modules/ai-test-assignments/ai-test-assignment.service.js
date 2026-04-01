@@ -12,13 +12,9 @@ import Subject from "../subjects/subject.model.js";
 import Parent from "../parents/parent.model.js";
 import AITestAssignment from "./ai-test-assignment.model.js";
 import AITestSubmission from "./ai-test-submission.model.js";
-import GameSession from "../game/game-session.model.js";
-import GameSessionPlayer from "../game/game-session-player.model.js";
 
 const GEMINI_MODEL = (process.env.GEMINI_MODEL || "gemini-2.5-flash-lite").replace(/^models\//, "");
 const ai = process.env.GEMINI_API_KEY ? new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY }) : null;
-const APP_TIMEZONE = process.env.APP_TIMEZONE || "Asia/Kolkata";
-const COMPULSORY_QUIZ_DAYS = new Set(["Wednesday", "Friday"]);
 
 function toPlain(instance) {
   return typeof instance?.get === "function" ? instance.get({ plain: true }) : instance;
@@ -52,90 +48,6 @@ function buildPersistedGeneratedMeta(meta = {}) {
 
 function getNow() {
   return new Date();
-}
-
-function getAppDateParts(date = getNow()) {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: APP_TIMEZONE,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    weekday: "long",
-  }).formatToParts(date);
-
-  const map = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-  return {
-    year: map.year,
-    month: map.month,
-    day: map.day,
-    weekday: map.weekday,
-  };
-}
-
-function isCompulsoryQuizDay(date = getNow()) {
-  return COMPULSORY_QUIZ_DAYS.has(getAppDateParts(date).weekday);
-}
-
-function isSameAppDay(dateValue, referenceDate = getNow()) {
-  if (!dateValue) return false;
-  const parsed = new Date(dateValue);
-  if (Number.isNaN(parsed.getTime())) return false;
-
-  const current = getAppDateParts(referenceDate);
-  const target = getAppDateParts(parsed);
-
-  return current.year === target.year && current.month === target.month && current.day === target.day;
-}
-
-function hasCompletedQuizItemToday(item, now = getNow()) {
-  const status = String(item?.status || "").toUpperCase();
-  const completedAt = item?.finished_at || item?.ended_at || item?.updated_at;
-
-  if (completedAt && isSameAppDay(completedAt, now)) {
-    return true;
-  }
-
-  return ["FINISHED", "COMPLETED"].includes(status) && isSameAppDay(item?.started_at, now);
-}
-
-async function hasCompletedCompulsoryQuizToday({ user, now = getNow() }) {
-  if (!user?.id || !isCompulsoryQuizDay(now)) {
-    return false;
-  }
-
-  const [playerRows, hostedSessions] = await Promise.all([
-    GameSessionPlayer.findAll({
-      where: { user_id: user.id },
-      include: [{ model: GameSession, attributes: ["id", "status", "started_at", "ended_at", "updated_at"] }],
-      order: [["updated_at", "DESC"]],
-      limit: 50,
-    }),
-    GameSession.findAll({
-      where: { host_user_id: user.id },
-      attributes: ["id", "status", "started_at", "ended_at", "updated_at"],
-      order: [["updated_at", "DESC"]],
-      limit: 20,
-    }),
-  ]);
-
-  const playedQuizToday = playerRows.some((row) =>
-    hasCompletedQuizItemToday(
-      {
-        status: row?.GameSession?.status || row?.status,
-        started_at: row?.GameSession?.started_at,
-        ended_at: row?.GameSession?.ended_at,
-        finished_at: row?.finished_at,
-        updated_at: row?.updated_at,
-      },
-      now
-    )
-  );
-
-  if (playedQuizToday) {
-    return true;
-  }
-
-  return hostedSessions.some((session) => hasCompletedQuizItemToday(session, now));
 }
 
 function getAssignmentQuestionList(content = "") {
@@ -941,19 +853,6 @@ export async function submitStudentAssignment({ user, assignmentId, answers, aut
 }
 
 export async function getStudentLockStatus({ user }) {
-  const now = getNow();
-
-  if (await hasCompletedCompulsoryQuizToday({ user, now })) {
-    return {
-      locked: false,
-      assignment: null,
-      weekly_quiz: {
-        required: true,
-        completed: true,
-      },
-    };
-  }
-
   const rows = await AITestSubmission.findAll({
     where: {
       school_id: user.school_id,
