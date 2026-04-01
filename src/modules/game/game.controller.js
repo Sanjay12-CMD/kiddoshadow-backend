@@ -89,6 +89,14 @@ export const submitSinglePlayerQuiz = asyncHandler(async (req, res) => {
       },
       { transaction: t }
     );
+
+    await session.update(
+      {
+        status: "FINISHED",
+        ended_at: new Date(),
+      },
+      { transaction: t }
+    );
   });
 
   res.json({ score, total: answers.length });
@@ -396,9 +404,12 @@ export const getQuizHistory = asyncHandler(async (req, res) => {
       session_id: p.session_id,
       mode: p.GameSession?.mode || "SINGLE",
       room_code: p.GameSession?.room_code || null,
-      status: p.GameSession?.status || null,
+      status:
+        p.GameSession?.mode === "SINGLE"
+          ? p.status || p.GameSession?.status || null
+          : p.GameSession?.status || p.status || null,
       started_at: p.GameSession?.started_at || null,
-      ended_at: p.GameSession?.ended_at || null,
+      ended_at: p.GameSession?.ended_at || p.finished_at || null,
       quiz: {
         id: p.GameSession?.Quiz?.id || fallbackQuiz?.id || null,
         title:
