@@ -34,13 +34,8 @@
     "express-rate-limit": "^8.2.1",
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.2",
-<<<<<<< HEAD
-    "pdf-parse": "^1.1.1",
-    "pdfjs-dist": "^2.16.105",
-=======
     "pdf-parse": "^2.2.2",
     "pdfjs-dist": "^5.4.624",
->>>>>>> b277362f (teacher)
     "pg": "^8.16.3",
     "pg-hstore": "^2.3.4",
     "sequelize": "^6.37.7",
@@ -51,7 +46,7 @@
     "dotenv-cli": "^11.0.0",
     "morgan": "^1.10.1",
     "nodemon": "^3.1.10",
-B    "sequelize-cli": "^6.6.3"
+    "sequelize-cli": "^6.6.3"
   }
 }
 

@@ -149,7 +149,7 @@ import entrepreneurshipRoutes from "./src/modules/entrepreneurship/entrepreneurs
 
 import paymentLogRoutes from "./src/modules/payment-logs/payment-log.routes.js";
 import voiceRoutes from "./src/modules/voice-logs/voice.routes.js";
-
+import studentTestRoutes from './student-tests.routes.js';
 
 // auth
 app.use("/api/auth", authRoutes);
@@ -159,7 +159,6 @@ app.use("/api", attendanceSummaryRoutes);
 app.use("/api", attendanceAnalyticsRoutes);
 // backward-compatible prefix for attendance routes
 app.use("/api/attendance", attendanceSummaryRoutes);
-import studentTestRoutes from "./student-tests.routes.js";import studentTestRoutes from "./student-tests.routes.js";app.use("/api/attendance", attendanceAnalyticsRoutes);
 
 // core
 app.use("/api/schools", schoolRoutes);
