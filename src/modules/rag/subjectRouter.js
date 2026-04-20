@@ -53,7 +53,8 @@ const QUESTION_STOP_WORDS = new Set([
   "topic",
 ]);
 
-const detectSubjectCategory = ({ question }) => (isEquationBasedQuestion(question) ? "equation" : "text");
+const detectSubjectCategory = ({ question, originalQuestion = null }) =>
+  isEquationBasedQuestion(originalQuestion || question) ? "equation" : "text";
 
 const extractQuestionKeywords = (question) =>
   [...new Set(
@@ -197,12 +198,28 @@ const buildStemResponse = ({ answer, metadatas = [], filter = "stem_router" }) =
   filters_used: filter,
 });
 
-export async function routeRagQuestion({ question, classLevel, bookScope = null, userId }) {
-  const subjectCategory = detectSubjectCategory({ question, bookScope });
+export async function routeRagQuestion({
+  question,
+  originalQuestion = null,
+  preferPreciseAnswer = false,
+  previousAnswer = null,
+  classLevel,
+  bookScope = null,
+  userId,
+}) {
+  const equationQuestion = String(originalQuestion || question || "").trim();
+  const subjectCategory = detectSubjectCategory({
+    question,
+    originalQuestion: equationQuestion,
+    bookScope,
+  });
 
   if (subjectCategory !== "equation") {
     const result = await askRag({
       question,
+      originalQuestion,
+      preferPreciseAnswer,
+      previousAnswer,
       classLevel,
       bookScope,
       userId,
@@ -215,17 +232,40 @@ export async function routeRagQuestion({ question, classLevel, bookScope = null,
       };
     }
 
+    const isDirectBookAnswer =
+      String(result?.filters_used || "") === "exact_topic_pdf_section" ||
+      /^pdf_text_(fallback|only)$/.test(String(result?.filters_used || ""));
+
+    if (!isDirectBookAnswer) {
+      const validationContext = await retrieveRagContext({
+        query: question,
+        classLevel,
+        bookScope,
+        allowGlobal: !bookScope,
+      });
+
+      if (!hasBookSupportForQuestion({ question, context: validationContext })) {
+        return {
+          ...result,
+          answer: BOOK_NOT_PROVIDED_TEXT,
+          sources: [],
+          source_type: "rag_no_match",
+          filters_used: `${result?.filters_used || "rag"}_book_guard_no_match`,
+        };
+      }
+    }
+
     return result;
   }
 
   const context = await retrieveEquationContext({
-    question,
+    question: equationQuestion,
     classLevel,
     bookScope,
   });
 
   const answer = await solveWithGeminiFromTextbook({
-    question,
+    question: equationQuestion,
     chunks: context?.chunks || [],
     metadatas: context.metadatas || [],
   });

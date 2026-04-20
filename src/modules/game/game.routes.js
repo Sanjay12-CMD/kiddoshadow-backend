@@ -8,6 +8,7 @@ import {
   getLeaderboard,
   joinMultiplayerQuiz,
   getQuizHistory,
+  getSinglePlayerQuizReviewController,
 } from "./game.controller.js";
 
 const router = express.Router();
@@ -30,6 +31,12 @@ router.post(
   "/quiz/single/submit",
   allowRoles("student", "teacher"),
   submitSinglePlayerQuiz
+);
+
+router.get(
+  "/quiz/:sessionId/review",
+  allowRoles("student", "teacher"),
+  getSinglePlayerQuizReviewController
 );
 
 router.get(

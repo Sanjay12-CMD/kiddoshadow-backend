@@ -13,6 +13,7 @@ const PDF_TEXT_CACHE_DIR = path.resolve(process.cwd(), "rag_data/pdf_text_cache"
 const ROOT_BOOK_CACHE_KEY = "__root__";
 const pdfPathCache = new Map();
 const pdfTextCache = new Map();
+const pdfLayoutTextCache = new Map();
 
 // Chroma setup
 const chromaUrl = new URL(
@@ -226,17 +227,25 @@ const isNoiseSegment = (value) => {
   const text = String(value || "").trim().toLowerCase();
   if (!text) return true;
 
+  // Check for trigger phrases
   if (
-    /^(exercise|example\s+\d+|fig\.?\s*\d+|reprint\b|let'?s explore\b|think about it\b|the big questions\b)/i.test(
+    /^(exercise|example\s+\d+|fig\.?\s*\d+|reprint\b|let'?s explore\b|think about it\b|the big questions\b|activities?\b|activity\b)/i.test(
       text
     )
   ) {
     return true;
   }
 
+  // Check for chapter/page markers
   if (/^\d+\s+[—―-]\s+/.test(text)) return true;
   if (/^(chapter|tapestry of the past|exploring society)/i.test(text)) return true;
+  if (/chapter\d+[\w\-_.]*\.indd/i.test(text)) return true;
+  
+  // Check for question prompts
   if (/^\d+\.\s+what\b/i.test(text)) return true;
+  
+  // Check for metadata patterns (timestamps, dates, page numbers mixed with chapter info)
+  if (/\d{1,2}:\d{2}:\d{2}|chapter\d+.*indd|\d{2}-\d{2}-\d{4}/.test(text)) return true;
 
   return false;
 };
@@ -321,6 +330,226 @@ const normalizeQuestionForRetrieval = (question) => {
     .trim();
 
   return normalized.replace(/^(a|an|the)\s+/, "").trim();
+};
+
+const detectAnswerLengthPreference = (question, { preferPreciseAnswer = false } = {}) => {
+  const text = String(question || "").toLowerCase();
+  if (/(?:\bin\s+detail\b|\bdetail(?:ed)?\b|\bfull\b|\bcomplete\b|\bwhole\s+topic\b|\bfrom\s+start\s+to\s+end\b|\bstart\s+to\s+end\b|\bin\s+depth\b)/i.test(text)) {
+    return "detailed";
+  }
+  if (/(?:\bin\s+brief\b|\bbriefly\b|\bin\s+short\b|\bshort\s+paragraph\b|\bshortly\b|\bshort\b)/i.test(text)) {
+    return "brief";
+  }
+  if (preferPreciseAnswer) {
+    return "precise";
+  }
+  if (isPreciseAnswerQuestion(question)) {
+    return "precise";
+  }
+  return "normal";
+};
+
+const shortenTextToSentences = (text, maxSentences = 2) => {
+  const normalized = String(text || "").replace(/\s+/g, " ").trim();
+  if (!normalized) return "";
+
+  const sentences = normalized.match(/[^.!?]+[.!?]+/g) || [normalized];
+  const shortened = sentences.slice(0, maxSentences).join(" ").trim();
+  return shortened || normalized;
+};
+
+const splitTextIntoParagraphs = (text) =>
+  String(text || "")
+    .replace(/\r\n/g, "\n")
+    .split(/\n{2,}/)
+    .map((paragraph) => normalizeBookChunk(paragraph))
+    .filter(Boolean);
+
+const isPreciseAnswerQuestion = (question) => {
+  const text = String(question || "").toLowerCase().replace(/\s+/g, " ").trim();
+  if (!text) return false;
+  const words = text.split(/\s+/).filter(Boolean);
+
+  if (/^(?:who|when|where|which|whose|whom|how many|how much|name|list)\b/.test(text)) {
+    return true;
+  }
+
+  if (
+    /^(?:what|why|how)\b/.test(text) &&
+    /\b(this|that|it|they|them|these|those|he|she|his|her|their|its|him)\b/.test(text)
+  ) {
+    return true;
+  }
+
+  if (
+    words.length <= 16 &&
+    /\b(how many|how much|how long|how old|which year|what year|whose|whom|where|when|who|duration|birthplace|born|capital|lasted from)\b/.test(
+      text
+    ) &&
+    !/^(?:what is|what are|define|describe|explain|write about|tell me about)\b/.test(text)
+  ) {
+    return true;
+  }
+
+  return false;
+};
+
+const extractRelevantSentences = (text, question, maxSentences = 1) => {
+  const segments = splitBookSegments(text).filter(
+    (segment) => segment.length >= 8 && !isNoiseSegment(segment) && !isQuestionPrompt(segment)
+  );
+  if (!segments.length) return [];
+
+  const keywords = [...new Set(tokenizeForMatch(normalizeQuestionForRetrieval(question)))].filter(Boolean);
+  const exactPhrase = normalizeSearchComparable(normalizeQuestionForRetrieval(question));
+
+  const scored = segments.map((segment, index) => {
+    const normalizedSegment = normalizeSearchComparable(segment);
+    let score = countKeywordMatches(segment, keywords) * 5;
+
+    if (exactPhrase && normalizedSegment.includes(exactPhrase)) {
+      score += 30;
+    }
+
+    if (
+      keywords.length >= 2 &&
+      keywords.every((keyword) => normalizedSegment.includes(normalizeSearchComparable(keyword)))
+    ) {
+      score += 15;
+    }
+
+    if (segment.length <= 220) {
+      score += 2;
+    }
+
+    return { index, segment, score };
+  });
+
+  const ranked = [...scored].sort((left, right) => right.score - left.score);
+  const best = ranked[0];
+
+  if (!best || best.score <= 0) {
+    return [];
+  }
+
+  const chosen = [best];
+
+  if (maxSentences > 1) {
+    const next = scored.find(
+      (entry) => entry.index === best.index + 1 && entry.score > 0 && !isQuestionPrompt(entry.segment)
+    );
+    if (next) {
+      chosen.push(next);
+    }
+  }
+
+  return chosen
+    .sort((left, right) => left.index - right.index)
+    .map((entry) => entry.segment.trim())
+    .filter(Boolean);
+};
+
+const formatAnswerForPreference = ({ text, question, lengthPreference = "normal" }) => {
+  const normalized = String(text || "").trim();
+  if (!normalized) return "";
+
+  if (lengthPreference === "detailed") {
+    return normalized;
+  }
+
+  if (lengthPreference === "brief") {
+    return shortenTextToSentences(normalized, 2);
+  }
+
+  if (lengthPreference === "precise") {
+    const sentenceLimit = /^(?:why|how)\b/i.test(String(question || "").trim()) ? 2 : 1;
+    const relevantSentences = extractRelevantSentences(normalized, question, sentenceLimit);
+    if (relevantSentences.length) {
+      return relevantSentences.join(" ");
+    }
+    return shortenTextToSentences(normalized, 1);
+  }
+
+  return normalized;
+};
+
+const ensureCompleteAnswerEnding = (text) => {
+  const normalized = String(text || "").trim();
+  if (!normalized) return "";
+
+  if (/[.!?]["')\]]?$/.test(normalized)) {
+    return normalized;
+  }
+
+  const cleanedEnding = normalized.replace(/[,:;\-—–]\s*$/, "").trim();
+  if (!cleanedEnding) return "";
+
+  if (/[.!?]["')\]]?$/.test(cleanedEnding)) {
+    return cleanedEnding;
+  }
+
+  const sentenceMatches = [...cleanedEnding.matchAll(/[^.!?]+[.!?](?=\s|$)/g)];
+  if (sentenceMatches.length) {
+    const lastMatch = sentenceMatches[sentenceMatches.length - 1];
+    const endIndex = (lastMatch.index || 0) + lastMatch[0].length;
+    if (endIndex >= Math.floor(cleanedEnding.length * 0.6)) {
+      return cleanedEnding.slice(0, endIndex).trim();
+    }
+  }
+
+  return `${cleanedEnding}.`;
+};
+
+const answerFollowUpFromPreviousAnswer = ({ previousAnswer, question }) => {
+  const cleanedPreviousAnswer = cleanBookAnswerText(previousAnswer);
+  if (!cleanedPreviousAnswer) return null;
+
+  const sentenceLimit = /^(?:why|how)\b/i.test(String(question || "").trim()) ? 2 : 1;
+  const relevantSentences = extractRelevantSentences(
+    cleanedPreviousAnswer,
+    question,
+    sentenceLimit
+  );
+
+  if (!relevantSentences.length) {
+    return null;
+  }
+
+  const candidate = relevantSentences.join(" ").trim();
+  const questionKeywords = [...new Set(tokenizeForMatch(normalizeQuestionForRetrieval(question)))];
+  const keywordMatches = countKeywordMatches(candidate, questionKeywords);
+
+  if (questionKeywords.length && keywordMatches <= 0) {
+    return null;
+  }
+
+  return ensureCompleteAnswerEnding(candidate);
+};
+
+const extractRelevantParagraphs = (text, question, maxParagraphs = 1) => {
+  const paragraphs = splitTextIntoParagraphs(text);
+  if (!paragraphs.length) return [];
+
+  const questionKeywords = [...new Set(tokenizeForMatch(normalizeQuestionForRetrieval(question)))].filter(Boolean);
+  const exactPhrase = normalizeSearchComparable(String(question || ""));
+
+  const scored = paragraphs.map((paragraph) => {
+    let score = countKeywordMatches(paragraph, questionKeywords) * 5;
+    if (exactPhrase && normalizeSearchComparable(paragraph).includes(exactPhrase)) {
+      score += 30;
+    }
+    if (questionKeywords.length && questionKeywords.every((keyword) => normalizeSearchComparable(paragraph).includes(keyword))) {
+      score += 15;
+    }
+    if (isNoiseSegment(paragraph)) score -= 10;
+    return { paragraph, score };
+  });
+
+  return scored
+    .sort((left, right) => right.score - left.score)
+    .filter((entry) => entry.score >= 0)
+    .slice(0, maxParagraphs)
+    .map((entry) => entry.paragraph);
 };
 
 const expandRetrievalTopic = (question) => {
@@ -599,11 +828,167 @@ const getCachedPdfText = async (pdfPath) => {
   return text;
 };
 
+const getCachedPdfLayoutText = async (pdfPath) => {
+  if (pdfLayoutTextCache.has(pdfPath)) {
+    return pdfLayoutTextCache.get(pdfPath);
+  }
+
+  let text = "";
+
+  try {
+    const { stdout } = await execFileAsync("pdftotext", ["-layout", pdfPath, "-"]);
+    text = String(stdout || "");
+  } catch {
+    text = "";
+  }
+
+  pdfLayoutTextCache.set(pdfPath, text);
+  return text;
+};
+
 const splitPdfParagraphs = (text) =>
   String(text || "")
+    .replace(/\r\n/g, "\n")
+    .replace(/\n{2,}/g, "\n\n")
     .split(/\n{2,}/)
-    .map((part) => normalizeBookChunk(part))
+    .map((part) => normalizeBookChunk(stripBookPageMetadata(part)))
     .filter((part) => part.length >= 40);
+
+const normalizeTopicHeadingLine = (value) =>
+  normalizeQuestionForRetrieval(
+    String(value || "")
+      .trim()
+      .replace(/^[a-z]\.?\s+/i, "")
+      .replace(/^[\d.\-–—)\s]+/, "")
+      .trim()
+  );
+
+const stripLayoutTopicLineArtifacts = (value) =>
+  String(value || "")
+    .replace(
+      /\s{8,}(?:(?:[A-Z][A-Za-z'()/-]+(?:\s+[A-Z][A-Za-z'()/-]+){0,6}\s*:)|(?:[0-9]+\s*[–—-]\s*[A-Za-z].*)).*$/i,
+      ""
+    )
+    .replace(/\s{8,}\d+\s*$/g, "")
+    .trimEnd();
+
+const isLayoutPageArtifactLine = (line) => {
+  const text = String(line || "").trim();
+  if (!text) return false;
+
+  return (
+    /^\d+$/.test(text) ||
+    /^reprint\s+\d{4}-\d{2}$/i.test(text) ||
+    /^chapter[\w.-]*\.indd\b/i.test(text) ||
+    /^\d{2}-\d{2}-\d{4}\s+\d{2}:\d{2}:\d{2}$/i.test(text) ||
+    /^[0-9]+\s*[–—-]\s*[A-Za-z].*$/.test(text) ||
+    /^(Exploring Society:|India and the World:|Governance and Democracy\b)/i.test(text)
+  );
+};
+
+const isLikelySectionHeadingLine = (line) => {
+  const text = String(line || "").trim();
+  if (!text) return false;
+  if (text.length > 90) return false;
+  if (/[.!?]$/.test(text)) return false;
+  if (/:\s*$/.test(text)) return true;
+  if (/^(let'?s explore|think about it|the big questions|activities?)\b/i.test(text)) {
+    return true;
+  }
+
+  const words = text.split(/\s+/).filter(Boolean);
+  if (!words.length || words.length > 8) return false;
+
+  return words.every((word) => /^[A-Z][A-Za-z'()/-]*$/.test(word));
+};
+
+const extractSectionFromExactTopicHeading = ({ text, question }) => {
+  const target = normalizeTopicHeadingLine(normalizeQuestionForRetrieval(question));
+  if (!target) return null;
+
+  const lines = String(text || "")
+    .replace(/\r\n/g, "\n")
+    .split("\n");
+
+  const headingIndex = lines.findIndex((line) => {
+    const cleanedLine = stripLayoutTopicLineArtifacts(line);
+    const normalizedLine = normalizeTopicHeadingLine(cleanedLine);
+    return normalizedLine === target || normalizedLine.startsWith(`${target} `);
+  });
+  if (headingIndex < 0) return null;
+
+  let startIndex = -1;
+  for (let index = headingIndex + 1; index < lines.length; index += 1) {
+    const artifactFreeLine = stripLayoutTopicLineArtifacts(lines[index]);
+    const line = stripBookPageMetadata(artifactFreeLine).trim();
+    if (isLayoutPageArtifactLine(line)) {
+      continue;
+    }
+    if (line) {
+      startIndex = index;
+      break;
+    }
+  }
+
+  if (startIndex < 0) return null;
+
+  const collected = [];
+
+  for (let index = startIndex; index < lines.length; index += 1) {
+    const rawLine = lines[index];
+    const cleanedLine = stripBookPageMetadata(stripLayoutTopicLineArtifacts(rawLine)).trim();
+
+    if (!cleanedLine) {
+      if (collected.length && collected[collected.length - 1] !== "") {
+        collected.push("");
+      }
+      continue;
+    }
+
+    if (isLayoutPageArtifactLine(cleanedLine)) {
+      continue;
+    }
+
+    if (index > startIndex && isLikelySectionHeadingLine(cleanedLine)) {
+      break;
+    }
+
+    if (/^[A-Z][A-Za-z'()/-]+(?:\s+[A-Z][A-Za-z'()/-]+){0,6}\s*:\s*$/i.test(cleanedLine)) {
+      break;
+    }
+
+    collected.push(cleanedLine);
+  }
+
+  const section = collected
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+
+  return section ? ensureCompleteAnswerEnding(cleanBookAnswerText(section)) : null;
+};
+
+const findExactTopicPdfAnswer = async ({ question, classLevel, bookScope = null }) => {
+  if (!isTopicStyleQuery(question)) return null;
+
+  const candidates = await buildPdfCandidates({ question, classLevel, bookScope });
+  if (!candidates.length) return null;
+
+  for (const pdfPath of candidates) {
+    const text = await getCachedPdfLayoutText(pdfPath);
+    if (!text.trim()) continue;
+
+    const answer = extractSectionFromExactTopicHeading({ text, question });
+    if (answer) {
+      return {
+        answer,
+        sourcePath: path.relative(BOOKS_DIR, pdfPath),
+      };
+    }
+  }
+
+  return null;
+};
 
 const findDirectPdfAnswer = async ({ question, classLevel, bookScope = null }) => {
   const candidates = await buildPdfCandidates({ question, classLevel, bookScope });
@@ -635,9 +1020,10 @@ const findDirectPdfAnswer = async ({ question, classLevel, bookScope = null }) =
     return null;
   }
 
+  const normalizedAnswer = cleanBookAnswerText(bestMatch.answer);
   const hasMatch = hasStrongKeywordMatch({
     question,
-    chunks: [bestMatch.answer],
+    chunks: [normalizedAnswer],
     metadatas: [{ source_path: bestMatch.sourcePath, book: path.basename(bestMatch.sourcePath) }],
   });
 
@@ -645,7 +1031,10 @@ const findDirectPdfAnswer = async ({ question, classLevel, bookScope = null }) =
     return null;
   }
 
-  return bestMatch;
+  return {
+    ...bestMatch,
+    answer: normalizedAnswer,
+  };
 };
 
 const extractDefinitionSubject = (question) => normalizeQuestionForRetrieval(question);
@@ -733,8 +1122,12 @@ const scoreChunkForQuestion = ({ chunk, question }) => {
   const keywords = [...new Set(tokenizeForMatch(question))];
   const subjectTokens = tokenizeForMatch(extractDefinitionSubject(question));
   const text = normalizeBookChunk(chunk);
+  const exactQuestionPhrase = normalizeSearchComparable(normalizeQuestionForRetrieval(question));
 
   let score = countKeywordMatches(text, keywords) * 4;
+  if (exactQuestionPhrase && exactQuestionPhrase.length >= 5 && normalizeSearchComparable(text).includes(exactQuestionPhrase)) {
+    score += 24;
+  }
   score += getDefinitionCueScore(text, subjectTokens);
   score += getHeadingMatchScore(text, question);
 
@@ -818,6 +1211,38 @@ const scoreRecordForQuestion = ({ record, question }) => {
   return score;
 };
 
+const isStrongTopicRecordMatch = ({ record, question }) => {
+  if (!isTopicStyleQuery(question)) return false;
+
+  const normalizedQuestion = normalizeQuestionForRetrieval(question);
+  const headingScore = getHeadingMatchScore(record?.chunk || "", question);
+  const searchText = normalizeSearchComparable(
+    `${normalizeBookChunk(record?.chunk || "")}\n${buildMetadataSearchText(record?.metadata)}`
+  );
+  const keywords = [...new Set(tokenizeForMatch(question))];
+  const distinctiveKeywords = keywords.filter(isDistinctiveKeyword);
+  const keywordMatchCount = countKeywordMatches(searchText, keywords);
+  const distinctiveMatchCount = countKeywordMatches(searchText, distinctiveKeywords);
+
+  if (headingScore >= 20) {
+    return true;
+  }
+
+  if (keywords.length === 1) {
+    return false;
+  }
+
+  if (normalizedQuestion && searchText.includes(normalizeSearchComparable(normalizedQuestion))) {
+    return true;
+  }
+
+  if (distinctiveKeywords.length >= 2) {
+    return distinctiveMatchCount >= distinctiveKeywords.length;
+  }
+
+  return keywords.length > 0 && keywordMatchCount >= keywords.length;
+};
+
 const buildChunkRecords = ({ ids = [], chunks = [], metadatas = [], distances = [] }) =>
   chunks.map((chunk, index) => ({
     id: ids?.[index] || "",
@@ -862,14 +1287,24 @@ const sortChunkRecords = (records = []) =>
     return left.chunkOrder - right.chunkOrder;
   });
 
-const pickBestChunkRecord = ({ ids = [], chunks = [], metadatas = [], distances = [], question }) =>
-  buildChunkRecords({ ids, chunks, metadatas, distances })
-    .filter((record) => record.chunk)
-    .map((record) => ({
-      ...record,
-      score: scoreRecordForQuestion({ record, question }),
-    }))
-    .sort((left, right) => right.score - left.score)[0] || null;
+const pickBestChunkRecord = ({ ids = [], chunks = [], metadatas = [], distances = [], question }) => {
+  const records = buildChunkRecords({ ids, chunks, metadatas, distances }).filter(
+    (record) => record.chunk
+  );
+  const strongTopicMatches = records.filter((record) =>
+    isStrongTopicRecordMatch({ record, question })
+  );
+  const candidateRecords = strongTopicMatches.length ? strongTopicMatches : records;
+
+  return (
+    candidateRecords
+      .map((record) => ({
+        ...record,
+        score: scoreRecordForQuestion({ record, question }),
+      }))
+      .sort((left, right) => right.score - left.score)[0] || null
+  );
+};
 
 const expandContextWithNeighborChunks = async ({
   ids = [],
@@ -934,13 +1369,18 @@ const expandContextWithNeighborChunks = async ({
   }
 };
 
-const buildSourceScopedPassage = ({ chunks, ids, metadatas, question }) => {
+const buildSourceScopedPassage = ({ chunks, ids, metadatas, question, lengthPreference = "normal" }) => {
   const records = buildChunkRecords({ ids, chunks, metadatas, distances: [] });
 
   const candidates = records.filter((record) => record.chunk);
   if (!candidates.length) return "";
 
-  const ranked = candidates
+  const strongTopicMatches = candidates.filter((record) =>
+    isStrongTopicRecordMatch({ record, question })
+  );
+  const scopedCandidates = strongTopicMatches.length ? strongTopicMatches : candidates;
+
+  const ranked = scopedCandidates
     .map((record) => ({
       ...record,
       score: scoreRecordForQuestion({ record, question }),
@@ -957,11 +1397,12 @@ const buildSourceScopedPassage = ({ chunks, ids, metadatas, question }) => {
   });
 
   const orderedSourceChunks = sameSource
-    .filter((record) =>
-      best.chunkOrder == null || record.chunkOrder == null
+    .filter((record) => {
+      if (lengthPreference === "detailed") return true;
+      return best.chunkOrder == null || record.chunkOrder == null
         ? true
-        : Math.abs(record.chunkOrder - best.chunkOrder) <= 4
-    )
+        : Math.abs(record.chunkOrder - best.chunkOrder) <= 4;
+    })
     .sort((left, right) => {
       if (left.chunkOrder == null && right.chunkOrder == null) return 0;
       if (left.chunkOrder == null) return 1;
@@ -972,33 +1413,247 @@ const buildSourceScopedPassage = ({ chunks, ids, metadatas, question }) => {
   return mergeChunksWithOverlap(orderedSourceChunks.map((record) => record.chunk));
 };
 
-const stripPageFurniture = (value) =>
-  String(value || "")
+const stripInlineBookArtifacts = (value) => {
+  let text = String(value || "").replace(/\r\n/g, "\n");
+  const titleWordPattern =
+    "(?:[A-Z][A-Za-z0-9'()/:&-]*|of|and|the|a|an|in|on|to|for|with|from|by|at)";
+  const titleSequencePattern = `${titleWordPattern}(?:\\s+${titleWordPattern}){1,10}`;
+  const textbookHeaderPattern =
+    "(?:Exploring\\s+Society|Tapestry\\s+of\\s+the\\s+Past|India\\s+and\\s+Beyond|Our\\s+Cultural\\s+Heritage\\s+and\\s+Knowledge\\s+Traditions)";
+
+  text = text
+    .replace(/[Æ➜➝➞➤➔►▶▪◦●]/g, " ")
+    .replace(/\bchapter\d+[\w\-_.]*\.indd\b[\s\S]*$/i, "")
+    .replace(/\b\d{1,2}[-/]\d{1,2}[-/]\d{2,4}\b(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?[\s\S]*$/i, "")
+    .replace(/\b\d{1,2}:\d{2}:\d{2}\b[\s\S]*$/i, "");
+
+  const leadingHeaderPatterns = [
+    /^\s*(?:page|pg|p)\s*\d{1,4}\b[:.\-–—]?\s*/i,
+    new RegExp(
+      `^\\s*\\d{1,4}\\s+\\d{1,3}\\s*[—–-]\\s*${titleSequencePattern}\\s*`
+    ),
+    new RegExp(`^\\s*\\d{1,4}\\s*[—–-]\\s*${titleSequencePattern}\\s*`),
+    new RegExp(
+      `^\\s*(?:[Cc]hapter|[Ll]esson)\\s*\\d+\\s*[:.\\-–—]?\\s*${titleSequencePattern}\\s*`
+    ),
+    /^\s*(?:chapter|lesson)\s*\d+\s*[:.\-–—]?\s*/i,
+    new RegExp(
+      `^\\s*\\d{1,4}\\s+${textbookHeaderPattern}(?::\\s*${titleSequencePattern})?\\s*(?:${titleSequencePattern})?\\s*(?:[a-z]\\.)?\\s*`,
+      "i"
+    ),
+  ];
+
+  for (const pattern of leadingHeaderPatterns) {
+    text = text.replace(pattern, "");
+  }
+
+  const inlineHeaderPatterns = [
+    new RegExp(`(^|[.!?]\\s+)\\d{1,4}\\s+\\d{1,3}\\s*[—–-]\\s*${titleSequencePattern}\\s*`, "g"),
+    new RegExp(`(^|[.!?]\\s+)\\d{1,4}\\s*[—–-]\\s*${titleSequencePattern}\\s*`, "g"),
+    new RegExp(`(^|[.!?]\\s+)(?:[Cc]hapter|[Ll]esson)\\s*\\d+\\s*[:.\\-–—]?\\s*${titleSequencePattern}\\s*`, "g"),
+    new RegExp(
+      `(^|[.!?]\\s+)\\d{1,4}\\s+${textbookHeaderPattern}(?::\\s*${titleSequencePattern})?\\s*(?:${titleSequencePattern})?\\s*(?:[a-z]\\.)?\\s*`,
+      "gi"
+    ),
+  ];
+
+  for (const pattern of inlineHeaderPatterns) {
+    text = text.replace(pattern, "$1");
+  }
+
+  const promptSentencePatterns = [
+    /(^|[.!?]\s+)\s*(?:LET(?:['’]S)?\s+EXPLORE|THINK\s+ABOUT\s+IT|THE\s+BIG\s+QUESTIONS?|BIG\s+QUESTIONS?|DO\s+YOU\s+KNOW)\b[:.\-–—]?\s*/gi,
+    /(^|[.!?]\s+)\s*(?:discuss|mention|write|fill(?:\s+in(?:\s+the\s+blanks?)?)?|complete|observe|look\s+at|find\s+out|answer|read|identify|match|tick|state|say|make|classify|choose|work\s+in\s+pairs?|work\s+in\s+groups?)\b[^.?!:]{0,280}[.?!:]\s*/gi,
+    /(^|[.!?]\s+)\s*(?:can\s+you\b[^?]{0,280}\?|what\b[^?]{0,280}\?|who\b[^?]{0,280}\?|when\b[^?]{0,280}\?|where\b[^?]{0,280}\?|why\b[^?]{0,280}\?|how\b[^?]{0,280}\?)\s*/gi,
+    /(^|[.!?]\s+)\s*try\s+to\s+(?:plot|locate|mark|find)\b[^.?!:]{0,280}[.?!:]\s*/gi,
+    /(^|[.!?]\s+)\s*Character\s+in\s+the\s+story\b[:.\-–—]?\s*/gi,
+    /(^|[.!?]\s+)\s*Activities?\s+they\s+are\s+engaged\s+in\b[:.\-–—]?\s*/gi,
+  ];
+
+  for (const pattern of promptSentencePatterns) {
+    text = text.replace(pattern, "$1");
+  }
+
+  let changed = true;
+  let guard = 0;
+
+  while (changed && guard < 8) {
+    guard += 1;
+    const before = text;
+
+    text = text
+      .replace(/^\s*(?:LET(?:['’]S)?\s+EXPLORE|THINK\s+ABOUT\s+IT|THE\s+BIG\s+QUESTIONS?|BIG\s+QUESTIONS?|DO\s+YOU\s+KNOW)\b[:.\-–—]?\s*/i, "")
+      .replace(/^\s*ACTIVIT(?:Y|IES)(?:\s*\d+(?:\.\d+)*)?\b[:.\-–—]?\s*/i, "")
+      .replace(/^\s*(?:exercise|project)\b(?:\s+\d+(?:\.\d+)*)?[:.\-–—]?\s*/i, "")
+      .replace(/^\s*(?:can\s+you\b[^?]{0,280}\?|what\b[^?]{0,280}\?|who\b[^?]{0,280}\?|when\b[^?]{0,280}\?|where\b[^?]{0,280}\?|why\b[^?]{0,280}\?|how\b[^?]{0,280}\?)\s*/i, "")
+      .replace(
+        /^\s*(?:discuss|mention|write|fill(?:\s+in(?:\s+the\s+blanks?)?)?|complete|observe|look\s+at|find\s+out|answer|read|identify|match|tick|state|say|make|classify|work\s+in\s+pairs?|work\s+in\s+groups?|choose|try\s+to\s+(?:plot|locate|mark|find))\b[^.?!:]{0,280}[:.?!]\s*/i,
+        ""
+      )
+      .replace(/^\s*Character\s+in\s+the\s+story\b[:.\-–—]?\s*/i, "")
+      .replace(/^\s*Activities?\s+they\s+are\s+engaged\s+in\b[:.\-–—]?\s*/i, "")
+      .replace(/^\s*[^\p{L}\p{N}"']+\s*/u, "")
+      .trim();
+
+    changed = text !== before.trim();
+  }
+
+  return text.trim();
+};
+
+const stripResidualBookHeaders = (value) => {
+  const titleWordPattern =
+    "(?:[A-Z][A-Za-z0-9'()/:&-]*|of|and|the|a|an|in|on|to|for|with|from|by|at)";
+  const titleSequencePattern = `${titleWordPattern}(?:\\s+${titleWordPattern}){1,14}`;
+  const textbookHeaderPattern =
+    "(?:Exploring\\s+Society|Tapestry\\s+of\\s+the\\s+Past|India\\s+and\\s+Beyond|Our\\s+Cultural\\s+Heritage\\s+and\\s+Knowledge\\s+Traditions)";
+
+  return String(value || "")
+    .replace(
+      new RegExp(
+        `(^|\\n)\\s*\\d{1,4}(?:\\s+\\d{1,3})?\\s*[—–-]\\s*(?:${titleSequencePattern}|${textbookHeaderPattern}(?::\\s*${titleSequencePattern})?)\\s+`,
+        "g"
+      ),
+      "$1"
+    )
+    .replace(
+      new RegExp(`(^|\\n)\\s*\\d{1,4}\\s+${textbookHeaderPattern}(?::\\s*${titleSequencePattern})?\\s+`, "g"),
+      "$1"
+    )
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+};
+
+const removeBookPromptSections = (value) => {
+  let text = String(value || "").replace(/\r\n/g, "\n");
+
+  // Remove isolated box sections that start on their own line/page.
+  text = text.replace(/\n\s*LET(?:['’]S)?\s+EXPLORE\b[\s\S]*/i, "\n");
+  text = text.replace(/\n\s*THINK\s+ABOUT\s+IT\b[\s\S]*/i, "\n");
+  text = text.replace(/\n\s*Big\s+Questions\b[\s\S]*/i, "\n");
+  text = text.replace(/\n\s*Exploring\s+Society\b[\s\S]*/i, "\n");
+  text = text.replace(/\n\s*Activities?(?:\s+\d+(?:\.\d+)*)?\s*(?::|-)?\s*(?:\n|$)[\s\S]*?(?=\n\n[A-Z]|\n\n\d+\.|\Z)/gi, "\n");
+
+  text = stripInlineBookArtifacts(text);
+  text = text.replace(/\n{2,}/g, "\n\n").trim();
+
+  return text;
+};
+const stripBookPageMetadata = (value) => {
+  const normalized = stripInlineBookArtifacts(
+    removeBookPromptSections(String(value || "").replace(/\r\n/g, "\n"))
+  );
+  return normalized
     .split(/\n+/)
     .map((line) => line.trim())
     .filter(Boolean)
+    // Remove pure page/chapter numbers
     .filter((line) => !/^\d{1,4}$/.test(line))
-    .filter((line) => !/^reprint\s+\d{4}-\d{2}$/i.test(line))
-    .filter((line) => !/^exploring society:/i.test(line))
+    // Remove page markers
+    .filter((line) => !/^(?:page|pg|p)\s*\d{1,4}$/i.test(line))
+    // Remove textbook page headers/titles
+    .filter(
+      (line) =>
+        !/^\d{1,4}\s+(?:Exploring\s+Society|Tapestry\s+of\s+the\s+Past|India\s+and\s+Beyond|Our\s+Cultural\s+Heritage\s+and\s+Knowledge\s+Traditions)\b/i.test(
+          line
+        )
+    )
+    // Remove chapter markers with file extensions
+    .filter((line) => !/^chapter[\w\-_.]*\.indd/i.test(line))
+    .filter((line) => !/chapter\d+[\w\-_.]*\.indd/i.test(line))
+    // Remove reprint info
+    .filter((line) => !/\b(reprint|repro|reprinted)\b.*\d{2,4}/i.test(line))
+    // Remove date formats
+    .filter((line) => !/^\d{1,2}[-\/]\d{1,2}[-\/]\d{2,4}(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?$/i.test(line))
+    .filter((line) => !/^\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2}(?::\d{2})?)?$/i.test(line))
+    // Remove time formats
+    .filter((line) => !/^\d{1,2}:\d{2}:\d{2}$/.test(line))
+    // Remove figure references
+    .filter((line) => !/^fig(?:ure)?\.?\s*\d+(?:\.\d+)?/i.test(line))
+    // Remove lines with chapter numbers in them followed by metadata
+    .filter((line) => !/chapter\s*\d+\.indd|\d+\s+\d+\s+[-—]\s+/i.test(line))
+    // Remove lines containing only timestamps and page numbers mixed
+    .filter((line) => !/\d{2}:\d{2}:\d{2}.*\d{2}-\d{2}-\d{4}|\d{2}-\d{2}-\d{4}.*\d{2}:\d{2}:\d{2}/.test(line))
     .join("\n");
+};
+
+const stripPageFurniture = (value) => stripBookPageMetadata(value);
+
+const extractParagraphContainingMatch = (text, match) => {
+  const beforeMatch = text.slice(0, match.index);
+  const afterMatch = text.slice(match.index + match[0].length);
+  const paragraphStart = Math.max(beforeMatch.lastIndexOf("\n\n"), beforeMatch.lastIndexOf("\r\n\r\n"));
+  const paragraphEnd = (() => {
+    const after = afterMatch;
+    const nextBreak = after.indexOf("\n\n");
+    const nextBreakCR = after.indexOf("\r\n\r\n");
+    if (nextBreak >= 0 && nextBreakCR >= 0) return Math.min(nextBreak, nextBreakCR);
+    if (nextBreak >= 0) return nextBreak;
+    if (nextBreakCR >= 0) return nextBreakCR;
+    return -1;
+  })();
+
+  const start = paragraphStart >= 0 ? paragraphStart + 2 : 0;
+  const end = paragraphEnd >= 0 ? match.index + match[0].length + paragraphEnd : text.length;
+  const paragraph = text.slice(start, end).trim();
+  return paragraph || text.trim();
+};
+
+const extractTextAroundMatch = (text, match) => {
+  const paragraph = extractParagraphContainingMatch(text, match);
+  if (paragraph && paragraph.length > 0) {
+    return paragraph;
+  }
+
+  const startBreak = Math.max(
+    text.lastIndexOf("\n\n", match.index),
+    text.lastIndexOf(". ", match.index),
+    text.lastIndexOf("? ", match.index),
+    text.lastIndexOf("! ", match.index)
+  );
+  const start = startBreak >= 0 ? startBreak + 2 : 0;
+
+  const endBreak = text.indexOf("\n\n", match.index + match[0].length);
+  const sentenceEnd = text.indexOf(". ", match.index + match[0].length);
+  const questionEnd = text.indexOf("? ", match.index + match[0].length);
+  const exclamationEnd = text.indexOf("! ", match.index + match[0].length);
+  const endCandidates = [endBreak, sentenceEnd >= 0 ? sentenceEnd + 1 : -1, questionEnd >= 0 ? questionEnd + 1 : -1, exclamationEnd >= 0 ? exclamationEnd + 1 : -1].filter((value) => value >= 0);
+  const end = endCandidates.length ? Math.min(...endCandidates) : text.length;
+  return text.slice(start, end).trim();
+};
+
+const cleanBookAnswerText = (value) => {
+  const cleaned = stripResidualBookHeaders(
+    stripInlineBookArtifacts(
+      removeBookPromptSections(String(value || "").replace(/\r\n/g, "\n"))
+    )
+  )
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  return cleaned;
+};
 
 const trimPassageToSection = ({ passage, question }) => {
   let text = stripPageFurniture(normalizeBookChunk(passage));
+  const cleanedOnly = text;
   if (!text) return "";
 
   const subject = extractDefinitionSubject(question);
   const startPatterns = [];
   let matchedHeading = false;
   let matchedHeadingText = "";
+  let matchedStartKind = "";
 
   if (subject) {
-    const subjectPattern = subject
-      .split(/\s+/)
-      .filter(Boolean)
-      .map((token) => escapeRegExp(token))
-      .join("\\s+");
+    const subjectPattern = buildSubjectPattern(question);
 
     if (subjectPattern) {
+      if (isTopicStyleQuery(question)) {
+        startPatterns.push({
+          pattern: new RegExp(`\\b${subjectPattern}\\b`, "i"),
+          kind: "topic",
+        });
+      }
       startPatterns.push({
         pattern: new RegExp(`(^|\\n)[a-z]\\.?\\s+${subjectPattern}(\\n|$)`, "i"),
         kind: "heading",
@@ -1025,9 +1680,14 @@ const trimPassageToSection = ({ passage, question }) => {
   for (const entry of startPatterns) {
     const match = text.match(entry.pattern);
     if (match?.index != null) {
-      text = text.slice(match.index).trim();
-      matchedHeading = entry.kind === "heading";
+      if (entry.kind === "inline") {
+        text = extractTextAroundMatch(text, match);
+      } else {
+        text = text.slice(match.index).trim();
+      }
+      matchedHeading = entry.kind === "heading" || entry.kind === "topic";
       matchedHeadingText = matchedHeading ? String(match[0] || "").trim() : "";
+      matchedStartKind = entry.kind;
       break;
     }
   }
@@ -1035,6 +1695,8 @@ const trimPassageToSection = ({ passage, question }) => {
   if (matchedHeading) {
     const lines = text.split("\n");
     let startIndex = 0;
+    const startFromFirstContentLine =
+      matchedStartKind === "topic" || isTopicStyleQuery(question);
 
     if (matchedHeadingText) {
       const headingLineIndex = lines.findIndex((line) => {
@@ -1044,11 +1706,24 @@ const trimPassageToSection = ({ passage, question }) => {
       });
 
       if (headingLineIndex >= 0) {
-        for (let index = headingLineIndex + 1; index < lines.length; index += 1) {
-          if (lines[index].trim()) {
-            startIndex = index;
-            break;
+        if (startFromFirstContentLine) {
+          for (let index = headingLineIndex + 1; index < lines.length; index += 1) {
+            if (lines[index].trim()) {
+              startIndex = index;
+              break;
+            }
           }
+        } else {
+          startIndex = headingLineIndex;
+        }
+      }
+    }
+
+    if (!startIndex && startFromFirstContentLine) {
+      for (let index = 0; index < lines.length; index += 1) {
+        if (lines[index].trim()) {
+          startIndex = index;
+          break;
         }
       }
     }
@@ -1092,12 +1767,23 @@ const trimPassageToSection = ({ passage, question }) => {
     }
   }
 
-  return text
+  const result = text
     .replace(/(What Is [^?\n]+\?)(\s+)/i, "$1\n")
     .replace(/(What, then, is [^?\n]+\?)(\s+)/i, "$1\n")
     .replace(/\s+—\s+/g, " — ")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+
+  if (result && result.length >= 20) {
+    return result;
+  }
+
+  if (cleanedOnly && cleanedOnly.length >= 30) {
+    const lines = cleanedOnly.split("\n").filter((l) => l.trim());
+    return lines.slice(0, 4).join("\n");
+  }
+
+  return result || cleanedOnly;
 };
 
 const buildFocusedSegments = ({ chunks, ids, metadatas, question }) => {
@@ -1148,19 +1834,145 @@ const buildFocusedSegments = ({ chunks, ids, metadatas, question }) => {
   return selected;
 };
 
-const buildStrictBookAnswer = ({ chunks, ids, metadatas, question }) => {
+const findFocusedPassageFromChunks = ({ chunks, ids, metadatas, question, lengthPreference = "normal" }) => {
+  const records = buildChunkRecords({ ids, chunks, metadatas, distances: [] })
+    .filter((record) => record.chunk)
+    .map((record) => ({
+      ...record,
+      score: scoreChunkForQuestion({ chunk: record.chunk, question }),
+    }))
+    .sort((left, right) => right.score - left.score);
+
+  const exactQuestionPhrase = normalizeSearchComparable(normalizeQuestionForRetrieval(question));
+
+  for (const record of records) {
+    if (lengthPreference === "precise") {
+      const relevantSentences = extractRelevantSentences(record.chunk, question, 1);
+      if (relevantSentences.length) {
+        return relevantSentences.join(" ");
+      }
+    }
+
+    if (exactQuestionPhrase && exactQuestionPhrase.length >= 5) {
+      const normalizedChunk = normalizeSearchComparable(record.chunk);
+      if (normalizedChunk.includes(exactQuestionPhrase)) {
+        const relevantParagraphs = extractRelevantParagraphs(
+          record.chunk,
+          question,
+          lengthPreference === "brief" ? 1 : 2
+        );
+        if (relevantParagraphs.length) {
+          return relevantParagraphs.join("\n\n");
+        }
+      }
+    }
+
+    const relevantParagraphs = extractRelevantParagraphs(
+      record.chunk,
+      question,
+      lengthPreference === "brief" ? 1 : 2
+    );
+
+    if (relevantParagraphs.length) {
+      return relevantParagraphs.join("\n\n");
+    }
+
+    const passage = trimPassageToSection({ passage: record.chunk, question });
+    if (passage && passage.length >= 30) {
+      return lengthPreference === "brief"
+        ? shortenTextToSentences(passage, 2)
+        : passage;
+    }
+  }
+
+  return null;
+};
+
+const buildStrictBookAnswer = ({ chunks, ids, metadatas, question, lengthPreference = "normal" }) => {
+  if (lengthPreference === "detailed") {
+    const detailedPassage = buildSourceScopedPassage({
+      chunks,
+      ids,
+      metadatas,
+      question,
+      lengthPreference,
+    });
+
+    if (isTopicStyleQuery(question)) {
+      const sectionPassage = trimPassageToSection({
+        passage: detailedPassage,
+        question,
+      });
+
+      if (sectionPassage) {
+        return formatAnswerForPreference({
+          text: sectionPassage,
+          question,
+          lengthPreference,
+        });
+      }
+    }
+
+    const fullPassage = stripPageFurniture(detailedPassage);
+    if (fullPassage) {
+      return formatAnswerForPreference({ text: fullPassage, question, lengthPreference });
+    }
+  }
+
+  if (isTopicStyleQuery(question)) {
+    const topicScopedPassage = trimPassageToSection({
+      passage: buildSourceScopedPassage({
+        chunks,
+        ids,
+        metadatas,
+        question,
+        lengthPreference: "detailed",
+      }),
+      question,
+    });
+
+    if (topicScopedPassage && topicScopedPassage.length >= 20) {
+      return formatAnswerForPreference({
+        text: topicScopedPassage,
+        question,
+        lengthPreference,
+      });
+    }
+  }
+
+  const bestRecord = pickBestChunkRecord({ ids, chunks, metadatas, question });
+  if (bestRecord?.chunk) {
+    const singlePassage = trimPassageToSection({ passage: bestRecord.chunk, question });
+    if (singlePassage && singlePassage.length >= 20) {
+      return formatAnswerForPreference({ text: singlePassage, question, lengthPreference });
+    }
+  }
+
   const exactPassage = trimPassageToSection({
     passage: buildSourceScopedPassage({
       chunks,
       ids,
       metadatas,
       question,
+      lengthPreference,
     }),
     question,
   });
 
-  if (exactPassage) {
-    return exactPassage;
+  if (exactPassage && exactPassage.length >= 20) {
+    return formatAnswerForPreference({ text: exactPassage, question, lengthPreference });
+  }
+
+  const focusedPassage = findFocusedPassageFromChunks({
+    chunks,
+    ids,
+    metadatas,
+    question,
+    lengthPreference,
+  });
+
+  if (focusedPassage && focusedPassage.length >= 20) {
+    return formatAnswerForPreference({ text: focusedPassage, question, lengthPreference });
   }
 
   const segments = buildFocusedSegments({
@@ -1170,11 +1982,19 @@ const buildStrictBookAnswer = ({ chunks, ids, metadatas, question }) => {
     question,
   }).filter((segment) => segment.length >= 8);
 
-  if (!segments.length) return null;
+  if (segments.length) {
+    const segmentText = segments
+      .map((segment) => (segment.startsWith("- ") ? segment : segment.trim()))
+      .join("\n");
+    return formatAnswerForPreference({ text: segmentText, question, lengthPreference });
+  }
 
-  return segments
-    .map((segment) => (segment.startsWith("- ") ? segment : segment.trim()))
-    .join("\n");
+  const fallbackMerged = stripPageFurniture(mergeChunksWithOverlap(chunks.slice(0, 3)));
+  if (fallbackMerged && fallbackMerged.length >= 30) {
+    return formatAnswerForPreference({ text: fallbackMerged, question, lengthPreference });
+  }
+
+  return null;
 };
 
 const STOP_WORDS = new Set([
@@ -1221,12 +2041,19 @@ const tokenizeForMatch = (value) =>
     .filter((token) => token.length >= 2 && !STOP_WORDS.has(token));
 
 const isTopicStyleQuery = (value) => {
+  const raw = String(value || "").trim();
   const text = normalizeQuestionForRetrieval(value);
   if (!text) return false;
-  if (/[?!]/.test(text)) return false;
+  if (/[?!]/.test(raw)) return false;
+  if (isPreciseAnswerQuestion(raw)) return false;
 
   const keywords = tokenizeForMatch(text);
-  return keywords.length >= 2 && keywords.length <= 6;
+  if (!keywords.length || keywords.length > 6) return false;
+  if (keywords.length === 1) {
+    return isDistinctiveKeyword(keywords[0]);
+  }
+
+  return true;
 };
 
 const expandTokenVariants = (token) => {
@@ -1305,8 +2132,7 @@ export const formatRagSources = (metadatas) => {
   return [
     ...new Set(
       metadatas.map((m) => {
-        const title = m.chapter || m.book || "Source";
-        return `Class ${m.class} - ${title}`;
+        return `Class ${m.class}`;
       })
     ),
   ];
@@ -1435,11 +2261,42 @@ export async function retrieveRagContext({
   }
 }
 
-export async function askRag({ question, classLevel, bookScope = null, userId }) {
+export async function askRag({
+  question,
+  originalQuestion = null,
+  preferPreciseAnswer = false,
+  previousAnswer = null,
+  classLevel,
+  bookScope = null,
+  userId,
+}) {
+  const answerQuestion = String(originalQuestion || question || "").trim();
+  const lengthPreference = detectAnswerLengthPreference(answerQuestion, { preferPreciseAnswer });
   const retrievalQuestion = normalizeQuestionForRetrieval(question) || String(question || "").trim();
   const expandedRetrievalQuestion = expandRetrievalTopic(question) || retrievalQuestion;
   const matchingQuestion = expandedRetrievalQuestion || retrievalQuestion || String(question || "").trim();
+  const selectionQuestion = answerQuestion || matchingQuestion;
   const resolvedScope = resolveBookScope(bookScope);
+
+  if (isTopicStyleQuery(selectionQuestion)) {
+    const exactTopicPdfAnswer = await findExactTopicPdfAnswer({
+      question: selectionQuestion,
+      classLevel,
+      bookScope,
+    });
+
+    if (exactTopicPdfAnswer?.answer) {
+      return {
+        answer: exactTopicPdfAnswer.answer,
+        sources: formatRagSources([{ class: normalizeClassLevel(classLevel) }]),
+        source_type: "rag",
+        filters_used: "exact_topic_pdf_section",
+        tokens_used: 0,
+        billing_warning: null,
+      };
+    }
+  }
+
   const context = await retrieveRagContext({
     query: matchingQuestion,
     classLevel,
@@ -1457,6 +2314,22 @@ export async function askRag({ question, classLevel, bookScope = null, userId })
   let finalMetadatas = context.metadatas;
   let finalDistances = context.distances || [];
   let billingWarning = null;
+
+  if (preferPreciseAnswer && previousAnswer && lengthPreference === "precise") {
+    const previousAnswerMatch = answerFollowUpFromPreviousAnswer({
+      previousAnswer,
+      question: answerQuestion,
+    });
+
+    if (previousAnswerMatch) {
+      answer = previousAnswerMatch;
+      usedFilter = "previous_answer_followup";
+      finalIds = [];
+      finalChunks = [previousAnswer];
+      finalMetadatas = [];
+      finalDistances = [];
+    }
+  }
 
   if (finalChunks.length) {
     const expanded = await expandContextWithNeighborChunks({
@@ -1479,7 +2352,8 @@ export async function askRag({ question, classLevel, bookScope = null, userId })
         chunks: finalChunks,
         ids: finalIds,
         metadatas: finalMetadatas,
-        question: matchingQuestion,
+        question: selectionQuestion,
+        lengthPreference,
       }) || mergeChunksWithOverlap(finalChunks.slice(0, 3));
 
     if (scopedAnswer) {
@@ -1501,6 +2375,23 @@ export async function askRag({ question, classLevel, bookScope = null, userId })
   const hasGoodVectorMatch = bestDistance != null && bestDistance <= 0.45;
   const hasRelevantContext = hasKeywordMatch || hasGoodVectorMatch;
 
+  // 1️⃣ ALWAYS try to build answer from retrieved chunks first
+  if (finalChunks.length && !answer) {
+    const strict = buildStrictBookAnswer({
+      chunks: finalChunks,
+      ids: finalIds,
+      metadatas: finalMetadatas,
+      question: selectionQuestion,
+      lengthPreference,
+    });
+
+    if (strict) {
+      answer = strict;
+      tokensUsed = 0;
+    }
+  }
+
+  // 2️⃣ If no answer yet, try PDF fallback
   if (!answer && (!chunks.length || !hasRelevantContext)) {
     const directPdfAnswer = await findDirectPdfAnswer({
       question: matchingQuestion,
@@ -1510,6 +2401,9 @@ export async function askRag({ question, classLevel, bookScope = null, userId })
 
     if (directPdfAnswer?.answer) {
       answer = directPdfAnswer.answer;
+      if (lengthPreference === "brief") {
+        answer = shortenTextToSentences(answer, 2);
+      }
       finalIds = [];
       finalChunks = [directPdfAnswer.answer];
       finalMetadatas = [
@@ -1525,25 +2419,14 @@ export async function askRag({ question, classLevel, bookScope = null, userId })
     } else {
       answer = "I don't know based on the provided books.";
       usedFilter = context.chromaAvailable ? "rag_no_match" : "chroma_unavailable";
-      if (context.chromaAvailable && chunks.length && !hasRelevantContext) {
-        finalIds = [];
-        finalChunks = [];
-        finalMetadatas = [];
-        finalDistances = [];
-      }
     }
   }
 
-  if (finalChunks.length && !answer) {
-    const strict = buildStrictBookAnswer({
-      chunks: finalChunks,
-      ids: finalIds,
-      metadatas: finalMetadatas,
-      question: matchingQuestion,
-    });
-
-    answer = strict || "I don't know based on the provided books.";
-    tokensUsed = 0;
+  answer = cleanBookAnswerText(answer);
+  answer = formatAnswerForPreference({ text: answer, question: selectionQuestion, lengthPreference });
+  answer = ensureCompleteAnswerEnding(answer);
+  if (!answer) {
+    answer = "I don't know based on the provided books.";
   }
 
   if (userId) {

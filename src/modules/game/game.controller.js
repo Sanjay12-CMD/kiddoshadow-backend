@@ -4,7 +4,7 @@ import GameSessionPlayer from "./game-session-player.model.js";
 import PlayerAnswer from "./player-answer.model.js";
 import Quiz from "../quiz/quiz.model.js";
 import QuizQuestion from "../quiz/quiz-question.model.js";
-import { generateQuizFromAi } from "../quiz/quiz-rag.service.js";
+import { generateQuizFromAi, getSinglePlayerQuizReview } from "../quiz/quiz-rag.service.js";
 import { isTimeOver } from "./game.utils.js";
 import AppError from "../../shared/appError.js";
 import asyncHandler from "../../shared/asyncHandler.js";
@@ -57,6 +57,7 @@ export const submitSinglePlayerQuiz = asyncHandler(async (req, res) => {
   }
 
   let score = 0;
+  const review = [];
 
   await db.transaction(async (t) => {
     for (const ans of answers) {
@@ -69,6 +70,16 @@ export const submitSinglePlayerQuiz = asyncHandler(async (req, res) => {
         question.correct_option_index === ans.selectedIndex;
 
       if (isCorrect) score++;
+      review.push({
+        questionId: question.id,
+        questionText: question.question_text,
+        options: Array.isArray(question.options) ? question.options : [],
+        selectedOptionIndex: ans.selectedIndex,
+        correctOptionIndex: question.correct_option_index,
+        selectedAnswer: question.options?.[ans.selectedIndex] ?? null,
+        correctAnswer: question.options?.[question.correct_option_index] ?? null,
+        isCorrect,
+      });
 
       await PlayerAnswer.create(
         {
@@ -99,7 +110,24 @@ export const submitSinglePlayerQuiz = asyncHandler(async (req, res) => {
     );
   });
 
-  res.json({ score, total: answers.length });
+  res.json({
+    score,
+    total: review.length,
+    review,
+    sessionId: session.id,
+    quizId: session.quiz_id,
+    topic: null,
+  });
+});
+
+export const getSinglePlayerQuizReviewController = asyncHandler(async (req, res) => {
+  const { sessionId } = req.params;
+  const result = await getSinglePlayerQuizReview({
+    sessionId,
+    user: req.user,
+  });
+
+  res.json(result);
 });
 
 export const startSinglePlayerQuiz = asyncHandler(async (req, res) => {

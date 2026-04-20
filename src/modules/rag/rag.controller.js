@@ -6,6 +6,7 @@ import {
   textToSpeech,
 } from "../../shared/services/voice.service.js";
 import Class from "../classes/classes.model.js";
+import AiChatLog from "../ai-chat-logs/ai-chat-log.model.js";
 
 const GEMINI_MODEL = (process.env.GEMINI_MODEL || "gemini-2.5-flash-lite").replace(/^models\//, "");
 const ai = process.env.GEMINI_API_KEY
@@ -378,6 +379,119 @@ const normalizeClassLevel = (value) => {
   return str.replace(/^class\s*/, "");
 };
 
+const normalizeFollowUpComparable = (value) =>
+  String(value || "")
+    .toLowerCase()
+    .replace(/[“”‘’]/g, "'")
+    .replace(/[^\p{L}\p{N}\s']/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const FOLLOW_UP_REFERENCE_PATTERN =
+  /\b(this|that|it|they|them|these|those|above|previous|earlier|same|more|detail|brief|short|summary|meaning|mean|continue|again|he|she|his|her|their|its|him)\b/i;
+const FOLLOW_UP_DIRECT_PATTERN =
+  /^(?:in\s+detail|in\s+short|briefly|shortly|more\s+detail|more\s+details|explain\s+more|tell\s+me\s+more|continue|elaborate|what\s+about\s+(?:this|that|it)|what\s+does\s+(?:this|that|it)\s+mean)\b/i;
+const FOLLOW_UP_FACT_PATTERN =
+  /\b(how\s+many|how\s+much|how\s+long|how\s+old|which\s+year|what\s+year|whose|whom|where|when|who|meaning|mean|meant|duration|birthplace|born|capital|lasted\s+from)\b/i;
+
+const isLikelyFollowUpQuestion = (question) => {
+  const normalized = normalizeFollowUpComparable(question);
+  if (!normalized) return false;
+
+  const words = normalized.split(/\s+/).filter(Boolean);
+
+  if (FOLLOW_UP_DIRECT_PATTERN.test(normalized)) {
+    return true;
+  }
+
+  if (words.length <= 6 && FOLLOW_UP_REFERENCE_PATTERN.test(normalized)) {
+    return true;
+  }
+
+  if (
+    words.length <= 8 &&
+    /^(why|how|when|where|who)\b/.test(normalized) &&
+    /\b(this|that|it|they|these|those|he|she|his|her|their|its|him)\b/.test(normalized)
+  ) {
+    return true;
+  }
+
+  if (
+    words.length <= 8 &&
+    /\?$/.test(String(question || "").trim()) &&
+    !/\b(?:about|explain|describe|write|note|detail|brief|short)\b/.test(normalized)
+  ) {
+    return true;
+  }
+
+  if (
+    words.length <= 16 &&
+    FOLLOW_UP_FACT_PATTERN.test(normalized) &&
+    !/^\b(?:what\s+is|what\s+are|define|describe|explain|write\s+about|tell\s+me\s+about)\b/.test(
+      normalized
+    )
+  ) {
+    return true;
+  }
+
+  return false;
+};
+
+const buildFollowUpAwareQuestion = ({ question, previousQuestion }) => {
+  const current = String(question || "").trim();
+  const previous = String(previousQuestion || "").trim();
+
+  if (!current || !previous) {
+    return current;
+  }
+
+  const normalized = normalizeFollowUpComparable(current);
+
+  if (
+    /^(?:in\s+detail|in\s+short|briefly|shortly|more\s+detail|more\s+details|explain\s+more|tell\s+me\s+more|continue|elaborate)$/i.test(
+      normalized
+    )
+  ) {
+    return `${previous} ${current}`;
+  }
+
+  return `${current} in the context of ${previous}`;
+};
+
+const getPreviousRagChatLog = async (userId) => {
+  if (!userId) return null;
+
+  return AiChatLog.findOne({
+    where: { user_id: userId, ai_type: "rag" },
+    order: [["created_at", "DESC"]],
+  });
+};
+
+const saveRagChatLog = async ({
+  userId,
+  question,
+  answer,
+  classLevel,
+  modelUsed = "rag",
+  tokensUsed = 0,
+}) => {
+  if (!userId || !question || !answer) return;
+
+  try {
+    await AiChatLog.create({
+      user_id: userId,
+      user_query: String(question).trim(),
+      ai_response: String(answer).trim(),
+      tokens_used: Number(tokensUsed) || 0,
+      model_used: modelUsed,
+      ai_type: "rag",
+      class_level: classLevel || null,
+    });
+  } catch (err) {
+    console.error("Failed to save RAG chat log:", err?.message || err);
+  }
+};
+
 export const askQuestion = asyncHandler(async (req, res) => {
   applyNoStoreHeaders(res);
 
@@ -411,7 +525,7 @@ export const askQuestion = asyncHandler(async (req, res) => {
 
   const cleanedQuestion = stripLanguageTag(question);
   const taggedLanguage = extractTaggedLanguage(question);
-  const searchQuestion = stripLanguageInstructionForSearch(cleanedQuestion);
+  let searchQuestion = stripLanguageInstructionForSearch(cleanedQuestion);
   const scopedBook =
     sourcePath ||
     source_path ||
@@ -436,10 +550,26 @@ export const askQuestion = asyncHandler(async (req, res) => {
     }
   }
 
+  const previousRagLog =
+    req.user?.id && isLikelyFollowUpQuestion(searchQuestion || cleanedQuestion)
+      ? await getPreviousRagChatLog(req.user.id)
+      : null;
+  const preferPreciseAnswer = Boolean(previousRagLog);
+
+  if (previousRagLog?.user_query) {
+    searchQuestion = buildFollowUpAwareQuestion({
+      question: searchQuestion || cleanedQuestion,
+      previousQuestion: previousRagLog.user_query,
+    });
+  }
+
   let result;
   try {
     result = await routeRagQuestion({
       question: searchQuestion || cleanedQuestion,
+      originalQuestion: cleanedQuestion,
+      preferPreciseAnswer,
+      previousAnswer: previousRagLog?.ai_response || null,
       classLevel: effectiveClassLevel,
       bookScope: scopedBook,
       userId: req.user.id,
@@ -480,6 +610,14 @@ export const askQuestion = asyncHandler(async (req, res) => {
       textAnswer = sanitizeTamilOutput(textAnswer);
     }
 
+    await saveRagChatLog({
+      userId: req.user?.id,
+      question: cleanedQuestion,
+      answer: textAnswer,
+      classLevel: effectiveClassLevel,
+      tokensUsed: result?.tokens_used || 0,
+    });
+
     return res.json({
       question: cleanedQuestion,
       answer: textAnswer,
@@ -506,6 +644,14 @@ for (const sentence of sentences) {
     break;
   }
 }
+
+await saveRagChatLog({
+  userId: req.user?.id,
+  question: cleanedQuestion,
+  answer: result.answer,
+  classLevel: effectiveClassLevel,
+  tokensUsed: result?.tokens_used || 0,
+});
 
 res.end();
 });
