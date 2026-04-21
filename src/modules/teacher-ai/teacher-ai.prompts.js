@@ -17,15 +17,29 @@ Additional STEM requirements:
 };
 
 const resolveQuestionPatternText = (questionPattern = {}) => {
-  const oneMarkCount = Number(questionPattern?.one_mark_count ?? questionPattern?.oneMarkCount ?? 4) || 0;
+  const selectedOneMarkType = String(questionPattern?.one_mark_type ?? questionPattern?.oneMarkType ?? "choose").replace(/_/g, " ");
+  const selectedOneMarkCount = Number(questionPattern?.one_mark_count ?? questionPattern?.oneMarkCount ?? 4) || 0;
+  const oneMarkChooseCount = Number(questionPattern?.one_mark_choose_count ?? questionPattern?.oneMarkChooseCount ?? 0) || 0;
+  const oneMarkFillCount = Number(questionPattern?.one_mark_fill_count ?? questionPattern?.oneMarkFillCount ?? 0) || 0;
+  const oneMarkMatchCount = Number(questionPattern?.one_mark_match_count ?? questionPattern?.oneMarkMatchCount ?? 0) || 0;
+  const oneMarkTrueFalseCount = Number(questionPattern?.one_mark_true_false_count ?? questionPattern?.oneMarkTrueFalseCount ?? 0) || 0;
+  const splitOneMarkCount = oneMarkChooseCount + oneMarkFillCount + oneMarkMatchCount + oneMarkTrueFalseCount;
+  const oneMarkCount = splitOneMarkCount || selectedOneMarkCount;
   const twoMarkCount = Number(questionPattern?.two_mark_count ?? questionPattern?.twoMarkCount ?? 4) || 0;
-  const eightMarkCount = Number(questionPattern?.eight_mark_count ?? questionPattern?.eightMarkCount ?? 1) || 0;
-  const totalMarks = oneMarkCount + twoMarkCount * 2 + eightMarkCount * 8;
+  const threeMarkCount = Number(questionPattern?.three_mark_count ?? questionPattern?.threeMarkCount ?? 2) || 0;
+  const fiveMarkCount = Number(questionPattern?.five_mark_count ?? questionPattern?.fiveMarkCount ?? 1) || 0;
+  const totalMarks = oneMarkCount + twoMarkCount * 2 + threeMarkCount * 3 + fiveMarkCount * 5;
 
   return [
     `Section A: ${oneMarkCount} questions x 1 mark`,
+    `  - Selected 1 mark type: ${selectedOneMarkType}`,
+    `  - Choose the correct answer: ${splitOneMarkCount ? oneMarkChooseCount : selectedOneMarkType === "choose" ? oneMarkCount : 0}`,
+    `  - Fill in the blanks: ${oneMarkFillCount}`,
+    `  - Match the following: ${oneMarkMatchCount}`,
+    `  - True or False: ${oneMarkTrueFalseCount}`,
     `Section B: ${twoMarkCount} questions x 2 marks`,
-    `Section C: ${eightMarkCount} questions x 8 marks`,
+    `Section C: ${threeMarkCount} questions x 3 marks`,
+    `Section D: ${fiveMarkCount} questions x 5 marks`,
     `Total Marks: ${totalMarks}`,
   ].join("\n");
 };
@@ -64,8 +78,13 @@ ${resolveQuestionPatternText(questionPattern || camelQuestionPattern)}
 
 Paper structure:
 Section A: One mark questions
+  - Choose the correct answer
+  - Fill in the blanks
+  - Match the following
+  - True or False
 Section B: Two mark questions
-Section C: Eight mark questions
+Section C: Three mark questions
+Section D: Five mark questions
 
 Clearly mention marks for each question.
 ${buildStemGuidance(subject)}

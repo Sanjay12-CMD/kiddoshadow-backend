@@ -43,6 +43,9 @@ function buildPersistedGeneratedMeta(meta = {}) {
     sources: toArray(safeMeta.sources).slice(0, 10),
     filters_used: safeMeta.filters_used || null,
     image_used: Boolean(safeMeta.image_used),
+    question_pattern: safeMeta.question_pattern || null,
+    total_marks: safeMeta.total_marks || null,
+    total_questions: safeMeta.total_questions || null,
   };
 }
 

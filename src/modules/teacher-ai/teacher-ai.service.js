@@ -131,12 +131,46 @@ function toWholeNumber(value, fallback) {
   return Math.floor(num);
 }
 
+function normalizeOneMarkType(value = "choose") {
+  const raw = String(value || "choose").trim().toLowerCase().replace(/[\s-]+/g, "_");
+  if (["fillup", "fill_up", "fill_blank", "fill_blanks", "fill_in_the_blank", "fill_in_the_blanks"].includes(raw)) return "fill";
+  if (["truefalse", "true_or_false", "true_false", "true/false"].includes(raw)) return "true_false";
+  if (["matching", "match_the_following"].includes(raw)) return "match";
+  return ["choose", "fill", "match", "true_false"].includes(raw) ? raw : "choose";
+}
+
 function resolveQuestionPattern(payload = {}) {
   const pattern = payload?.question_pattern || payload?.questionPattern || {};
-  const oneMarkCount = toWholeNumber(pattern?.one_mark_count ?? pattern?.oneMarkCount ?? payload?.one_mark_count ?? payload?.oneMarkCount, 4);
+  const explicitOneMarkCount = pattern?.one_mark_count ?? pattern?.oneMarkCount ?? payload?.one_mark_count ?? payload?.oneMarkCount;
+  const selectedOneMarkType = normalizeOneMarkType(
+    pattern?.one_mark_type ?? pattern?.oneMarkType ?? payload?.one_mark_type ?? payload?.oneMarkType
+  );
+  const selectedOneMarkCount = toWholeNumber(explicitOneMarkCount, 5);
+  const oneMarkChooseCount = toWholeNumber(
+    pattern?.one_mark_choose_count ?? pattern?.oneMarkChooseCount ?? payload?.one_mark_choose_count ?? payload?.oneMarkChooseCount,
+    explicitOneMarkCount === undefined ? 0 : selectedOneMarkType === "choose" ? selectedOneMarkCount : 0
+  );
+  const oneMarkFillCount = toWholeNumber(
+    pattern?.one_mark_fill_count ?? pattern?.oneMarkFillCount ?? payload?.one_mark_fill_count ?? payload?.oneMarkFillCount,
+    explicitOneMarkCount === undefined ? 0 : selectedOneMarkType === "fill" ? selectedOneMarkCount : 0
+  );
+  const oneMarkMatchCount = toWholeNumber(
+    pattern?.one_mark_match_count ?? pattern?.oneMarkMatchCount ?? payload?.one_mark_match_count ?? payload?.oneMarkMatchCount,
+    explicitOneMarkCount === undefined ? 0 : selectedOneMarkType === "match" ? selectedOneMarkCount : 0
+  );
+  const oneMarkTrueFalseCount = toWholeNumber(
+    pattern?.one_mark_true_false_count ?? pattern?.oneMarkTrueFalseCount ?? payload?.one_mark_true_false_count ?? payload?.oneMarkTrueFalseCount,
+    explicitOneMarkCount === undefined ? 0 : selectedOneMarkType === "true_false" ? selectedOneMarkCount : 0
+  );
+  const splitOneMarkCount = oneMarkChooseCount + oneMarkFillCount + oneMarkMatchCount + oneMarkTrueFalseCount;
+  const oneMarkCount = splitOneMarkCount || toWholeNumber(explicitOneMarkCount, 4);
   const twoMarkCount = toWholeNumber(pattern?.two_mark_count ?? pattern?.twoMarkCount ?? payload?.two_mark_count ?? payload?.twoMarkCount, 4);
-  const eightMarkCount = toWholeNumber(
-    pattern?.eight_mark_count ?? pattern?.eightMarkCount ?? payload?.eight_mark_count ?? payload?.eightMarkCount,
+  const threeMarkCount = toWholeNumber(
+    pattern?.three_mark_count ?? pattern?.threeMarkCount ?? payload?.three_mark_count ?? payload?.threeMarkCount,
+    2
+  );
+  const fiveMarkCount = toWholeNumber(
+    pattern?.five_mark_count ?? pattern?.fiveMarkCount ?? payload?.five_mark_count ?? payload?.fiveMarkCount,
     1
   );
 
@@ -146,6 +180,12 @@ function resolveQuestionPattern(payload = {}) {
       title: "Section A: One Mark Questions",
       count: oneMarkCount,
       marksPerQuestion: 1,
+      subtypes: [
+        { key: "choose", title: "Choose the correct answer", count: splitOneMarkCount ? oneMarkChooseCount : oneMarkCount },
+        { key: "fill", title: "Fill in the blanks", count: oneMarkFillCount },
+        { key: "match", title: "Match the following", count: oneMarkMatchCount },
+        { key: "true_false", title: "True or False", count: oneMarkTrueFalseCount },
+      ].filter((item) => item.count > 0),
     },
     {
       key: "two_mark",
@@ -154,10 +194,16 @@ function resolveQuestionPattern(payload = {}) {
       marksPerQuestion: 2,
     },
     {
-      key: "eight_mark",
-      title: "Section C: Eight Mark Questions",
-      count: eightMarkCount,
-      marksPerQuestion: 8,
+      key: "three_mark",
+      title: "Section C: Three Mark Questions",
+      count: threeMarkCount,
+      marksPerQuestion: 3,
+    },
+    {
+      key: "five_mark",
+      title: "Section D: Five Mark Questions",
+      count: fiveMarkCount,
+      marksPerQuestion: 5,
     },
   ];
 
@@ -167,7 +213,13 @@ function resolveQuestionPattern(payload = {}) {
     totalMarks: sections.reduce((sum, section) => sum + section.count * section.marksPerQuestion, 0),
     summary: sections
       .filter((section) => section.count > 0)
-      .map((section) => `${section.count} x ${section.marksPerQuestion} mark${section.marksPerQuestion > 1 ? "s" : ""}`)
+      .map((section) => {
+        if (section.key !== "one_mark" || !section.subtypes?.length) {
+          return `${section.count} x ${section.marksPerQuestion} mark${section.marksPerQuestion > 1 ? "s" : ""}`;
+        }
+        const subtypeSummary = section.subtypes.map((item) => `${item.count} ${item.key}`).join(" + ");
+        return `${section.count} x 1 mark (${subtypeSummary})`;
+      })
       .join(", "),
   };
 }
@@ -220,7 +272,12 @@ function createBlankedSentence(sentence = "") {
   const topic = extractTopicFromSentence(sentence);
   if (!topic || topic.length < 3) return sentence;
   const escaped = topic.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return sentence.replace(new RegExp(`\\b${escaped}\\b`, "i"), "_____ ");
+  const blanked = sentence.replace(new RegExp(`\\b${escaped}\\b`, "i"), "_____");
+  return (blanked === sentence ? sentence.replace(/\b([A-Za-z]{4,})\b/, "_____") : blanked).replace(/\s+/g, " ");
+}
+
+function isWeakQuestionTopic(topic = "") {
+  return /^(students?|teachers?|use|write|answer|revise|include|focus|ask)\b/i.test(String(topic || "").trim());
 }
 
 function collectTextbookPoints(chunks = []) {
@@ -244,25 +301,79 @@ function buildQuestionSections({ payload, points = [] }) {
     .filter((section) => section.count > 0)
     .map((section) => {
       const questions = [];
+      const oneMarkSubBlocks = [];
+
+      const addOneMarkQuestion = (subtype, localIndex) => {
+        const sentence = getPointAt(points, questionNumber - 1, `${chapter} is an important concept in ${subject}.`);
+        const extractedTopic = extractTopicFromSentence(sentence);
+        const topic = extractedTopic && !isWeakQuestionTopic(extractedTopic) ? extractedTopic : chapter;
+
+        if (subtype.key === "choose") {
+          questions.push(
+            `${questionNumber}. Choose the correct answer: ${topic} is mainly related to which part of ${subject}? ` +
+              `(a) ${topic} (b) Unrelated term (c) Opposite idea (d) None of these (${section.marksPerQuestion} mark)`
+          );
+        } else if (subtype.key === "fill") {
+          questions.push(
+            `${questionNumber}. Fill in the blank from the textbook statement: ${createBlankedSentence(sentence)} (${section.marksPerQuestion} mark)`
+          );
+        } else if (subtype.key === "match") {
+          questions.push(
+            `${questionNumber}. Match the following related to ${topic}: Column A item ${localIndex + 1} with its correct meaning/example from the chapter. (${section.marksPerQuestion} mark)`
+          );
+        } else if (subtype.key === "true_false") {
+          questions.push(
+            `${questionNumber}. True or False: ${sentence.replace(/[.!?]+$/g, "")}. (${section.marksPerQuestion} mark)`
+          );
+        }
+
+        questionNumber += 1;
+      };
+
+      if (section.key === "one_mark" && section.subtypes?.length) {
+        section.subtypes.forEach((subtype) => {
+          const before = questions.length;
+          for (let index = 0; index < subtype.count; index += 1) {
+            addOneMarkQuestion(subtype, index);
+          }
+          const subtypeQuestions = questions.splice(before);
+          if (subtypeQuestions.length) {
+            oneMarkSubBlocks.push(`${subtype.title}\n${subtypeQuestions.join("\n")}`);
+          }
+        });
+
+        return `${section.title}\n${oneMarkSubBlocks.join("\n\n")}`;
+      }
 
       for (let index = 0; index < section.count; index += 1) {
         const sentence = getPointAt(points, questionNumber - 1, `${chapter} is an important concept in ${subject}.`);
-        const topic = extractTopicFromSentence(sentence) || chapter;
+        const extractedTopic = extractTopicFromSentence(sentence);
+        const topic = extractedTopic && !isWeakQuestionTopic(extractedTopic) ? extractedTopic : chapter;
 
-        if (section.key === "one_mark") {
-          const variants = [
-            `Define ${topic} from the textbook. (${section.marksPerQuestion} mark)`,
-            `Fill in the blank from the textbook statement: ${createBlankedSentence(sentence)} (${section.marksPerQuestion} mark)`,
-            `Write one key term related to ${topic}. (${section.marksPerQuestion} mark)`,
-            `State one textbook fact about ${topic}. (${section.marksPerQuestion} mark)`,
-          ];
-          questions.push(`${questionNumber}. ${variants[index % variants.length]}`);
-        } else if (section.key === "two_mark") {
+        if (section.key === "two_mark") {
           const variants = [
             `Explain ${topic} briefly in 2-3 lines using the textbook idea: "${sentence}" (${section.marksPerQuestion} marks)`,
             `Write any two important points about ${topic} from the chapter. (${section.marksPerQuestion} marks)`,
             `Differentiate ${topic} from a related concept in ${subject}. (${section.marksPerQuestion} marks)`,
             `List two uses, functions, or outcomes connected to ${topic}. (${section.marksPerQuestion} marks)`,
+          ];
+          questions.push(`${questionNumber}. ${variants[index % variants.length]}`);
+        } else if (section.key === "three_mark") {
+          const variants = [
+            `Explain ${topic} in 4-5 lines using the textbook point: "${sentence}" (${section.marksPerQuestion} marks)`,
+            `Write three important points about ${topic} from the chapter. (${section.marksPerQuestion} marks)`,
+            `Give a reason-based answer about ${topic} with one suitable example. (${section.marksPerQuestion} marks)`,
+            `Match or connect the related terms and explain their relationship for ${topic}. (${section.marksPerQuestion} marks)`,
+          ];
+          questions.push(`${questionNumber}. ${variants[index % variants.length]}`);
+        } else if (section.key === "five_mark") {
+          const variants = [
+            stemSubject
+              ? `Write a detailed answer on ${topic} with textbook explanation, formula/steps where needed, and a labelled diagram or worked example. (${section.marksPerQuestion} marks)`
+              : `Write a detailed answer on ${topic} with textbook explanation, key points, and suitable examples. (${section.marksPerQuestion} marks)`,
+            `Describe ${topic} in detail using five textbook points. (${section.marksPerQuestion} marks)`,
+            `Write an application-based answer on ${topic} with explanation and example. (${section.marksPerQuestion} marks)`,
+            `Prepare a structured answer for ${topic} with definition, explanation, example, and conclusion. (${section.marksPerQuestion} marks)`,
           ];
           questions.push(`${questionNumber}. ${variants[index % variants.length]}`);
         } else {
@@ -534,13 +645,20 @@ Output rules:
 - Include Class, Subject, Chapter, and Total Marks lines.
 - Include a "Question Pattern" line matching this exact split: ${pattern.summary}.
 - Add "General Instructions".
-- Add three sections exactly named:
+- Add four sections exactly named:
 Section A: One Mark Questions
 Section B: Two Mark Questions
-Section C: Eight Mark Questions
+Section C: Three Mark Questions
+Section D: Five Mark Questions
 - Create exactly ${pattern.sections[0].count} one-mark questions in Section A.
+- Inside Section A, split one-mark questions into these subheadings and exact counts:
+  - Choose the correct answer: ${pattern.sections[0].subtypes?.find((item) => item.key === "choose")?.count || 0}
+  - Fill in the blanks: ${pattern.sections[0].subtypes?.find((item) => item.key === "fill")?.count || 0}
+  - Match the following: ${pattern.sections[0].subtypes?.find((item) => item.key === "match")?.count || 0}
+  - True or False: ${pattern.sections[0].subtypes?.find((item) => item.key === "true_false")?.count || 0}
 - Create exactly ${pattern.sections[1].count} two-mark questions in Section B.
-- Create exactly ${pattern.sections[2].count} eight-mark questions in Section C.
+- Create exactly ${pattern.sections[2].count} three-mark questions in Section C.
+- Create exactly ${pattern.sections[3].count} five-mark questions in Section D.
 - The final paper must total exactly ${pattern.totalMarks} marks.
 - Every question line must begin with a number like "1. ".
 - Include marks on every question line.
@@ -649,9 +767,15 @@ export async function runTeacherAI({ user, aiType, payload }) {
   safePayload.marks = Number(safePayload.marks || safePayload.totalMarks || questionPattern.totalMarks || 20);
   safePayload.totalMarks = safePayload.marks;
   safePayload.question_pattern = {
+    one_mark_type: questionPattern.sections[0].subtypes?.[0]?.key || "choose",
     one_mark_count: questionPattern.sections[0].count,
+    one_mark_choose_count: questionPattern.sections[0].subtypes?.find((item) => item.key === "choose")?.count || 0,
+    one_mark_fill_count: questionPattern.sections[0].subtypes?.find((item) => item.key === "fill")?.count || 0,
+    one_mark_match_count: questionPattern.sections[0].subtypes?.find((item) => item.key === "match")?.count || 0,
+    one_mark_true_false_count: questionPattern.sections[0].subtypes?.find((item) => item.key === "true_false")?.count || 0,
     two_mark_count: questionPattern.sections[1].count,
-    eight_mark_count: questionPattern.sections[2].count,
+    three_mark_count: questionPattern.sections[2].count,
+    five_mark_count: questionPattern.sections[3].count,
   };
   const promptText = promptBuilder(safePayload);
 
@@ -708,6 +832,9 @@ export async function runTeacherAI({ user, aiType, payload }) {
 
   return {
     text: finalText,
+    question_pattern: aiType === "question_paper" ? safePayload.question_pattern : undefined,
+    total_marks: aiType === "question_paper" ? questionPattern.totalMarks : undefined,
+    total_questions: aiType === "question_paper" ? questionPattern.totalQuestions : undefined,
     source_type: imageInput.length
       ? trimmedChunks.length
         ? "rag_vision"
