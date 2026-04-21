@@ -43,6 +43,8 @@ import AuditLog from "../modules/audit/audit-log.model.js";
 
 /* ===================== TOKENS / BILLING ===================== */
 import Subscription from "../modules/subscriptions/subscription.model.js";
+import BillingReference from "../modules/billing/billing-reference.model.js";
+import BillingInvoice from "../modules/billing/billing-invoice.model.js";
 import TokenAccount from "../modules/tokens/token-account.model.js";
 import TokenTransaction from "../modules/tokens/token-transaction.model.js";
 import TokenPolicy from "../modules/tokens/token-policy.model.js";
@@ -265,6 +267,8 @@ const initAssociations = () => {
 
   /* ==================== TOKENS ==================== */
   Subscription.belongsTo(School, { foreignKey: "school_id" });
+  BillingInvoice.belongsTo(School, { foreignKey: "school_id" });
+  School.hasMany(BillingInvoice, { foreignKey: "school_id" });
   TokenAccount.belongsTo(User, { foreignKey: "user_id" });
   TokenTransaction.belongsTo(User, { foreignKey: "user_id" });
   TokenPolicy.belongsTo(User, { foreignKey: "updated_by" });

@@ -4,6 +4,7 @@ export function buildQuizPrompt({
   difficulty,
   numQuestions,
   excludedQuestionTexts = [],
+  language = "English",
 }) {
   const avoidBlock = excludedQuestionTexts.length
     ? `
@@ -20,12 +21,16 @@ Class: ${classLevel}
 Topic: ${topic}
 Difficulty: ${difficulty}
 Number of questions: ${numQuestions}
+Language: ${language}
 
 Rules:
 - Each question must have 4 options
 - Only one correct option
 - Difficulty must match
 - Questions must be suitable for Class ${classLevel}
+- If Language is Tamil, write the quiz title, every question, and every option fully in Tamil script
+- If Language is Tamil, keep JSON keys in English but all student-facing text must be Tamil
+- If the topic itself is in Tamil, treat Language as Tamil
 - Every question must be different from the previously used questions listed below
 - Avoid repeating the same wording, idea, or correct answer pattern
 - Return ONLY valid JSON

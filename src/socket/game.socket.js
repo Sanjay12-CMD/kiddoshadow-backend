@@ -6,6 +6,7 @@ import { isTimeOver } from "../modules/game/game.utils.js";
 import PlayerAnswer from "../modules/game/player-answer.model.js";
 import QuizQuestion from "../modules/quiz/quiz-question.model.js";
 import db from "../config/db.js";
+import User from "../modules/users/user.model.js";
 
 const sessionState = new Map();
 
@@ -14,6 +15,40 @@ function sanitizeQuestion(question) {
     id: question.id,
     question_text: question.question_text,
     options: question.options,
+  };
+}
+
+async function buildLobbyPayload(sessionId) {
+  const session = await GameSession.findByPk(sessionId);
+  if (!session) return null;
+
+  const [host, players] = await Promise.all([
+    User.findByPk(session.host_user_id, { attributes: ["id", "name", "username"] }),
+    GameSessionPlayer.findAll({
+      where: {
+        session_id: sessionId,
+        status: { [Op.notIn]: ["DISCONNECTED", "FINISHED"] },
+      },
+      include: [{ model: User, attributes: ["id", "name", "username"] }],
+      order: [["joined_at", "ASC"]],
+    }),
+  ]);
+
+  return {
+    sessionId: session.id,
+    roomCode: session.room_code,
+    status: session.status,
+    maxPlayers: session.max_players,
+    hostUserId: session.host_user_id,
+    hostName: host?.name || host?.username || "Host",
+    players: players.map((player) => ({
+      playerId: player.id,
+      userId: player.user_id,
+      name: player.User?.name || player.User?.username || "Player",
+      status: player.status,
+      isHost: player.is_host,
+      score: player.score,
+    })),
   };
 }
 
@@ -97,6 +132,10 @@ export function initGameSocket(io) {
   };
 
   io.on("connection", (socket) => {
+    const emitLobbyUpdate = async (sessionId) => {
+      const payload = await buildLobbyPayload(sessionId);
+      if (payload) io.to(`quiz:${sessionId}`).emit("quiz:lobby_update", payload);
+    };
 
     /**
      * JOIN QUIZ ROOM
@@ -104,9 +143,18 @@ export function initGameSocket(io) {
     socket.on("quiz:join", async ({ sessionId }) => {
       // 1️⃣ HOST CHECK
       const session = await GameSession.findByPk(sessionId);
+      if (!session) {
+        socket.emit("quiz:error", { message: "Room not found" });
+        return;
+      }
+
+      if (session.status === "FINISHED" || session.status === "CANCELLED") {
+        socket.emit("quiz:error", { message: "Quiz already finished" });
+        return;
+      }
 
       // Teacher host joins as observer only (no player record)
-      if (session && session.host_user_id === socket.user.id && socket.user.role === "teacher") {
+      if (session.host_user_id === socket.user.id && socket.user.role === "teacher") {
         socket.join(`quiz:${sessionId}`);
         socket.emit("quiz:joined", {
           sessionId,
@@ -114,6 +162,7 @@ export function initGameSocket(io) {
           status: session.status,
           isHost: true
         });
+        await emitLobbyUpdate(sessionId);
         const state = sessionState.get(sessionId);
         if (session.status === "IN_PROGRESS" && state?.questions?.length) {
           const timeLeft = Math.max(
@@ -139,6 +188,18 @@ export function initGameSocket(io) {
       });
 
       if (!player) {
+        const count = await GameSessionPlayer.count({
+          where: {
+            session_id: sessionId,
+            status: { [Op.notIn]: ["DISCONNECTED", "FINISHED"] },
+          },
+        });
+
+        if (session?.max_players && count >= session.max_players) {
+          socket.emit("quiz:error", { message: "Room is full" });
+          return;
+        }
+
         player = await GameSessionPlayer.create({
           session_id: sessionId,
           user_id: socket.user.id,
@@ -159,11 +220,15 @@ export function initGameSocket(io) {
         return;
       }
 
+      const nextStatus = player.status === "DISCONNECTED"
+        ? session?.status === "IN_PROGRESS"
+          ? "PLAYING"
+          : "JOINED"
+        : player.status;
+
       await player.update({
         socket_id: socket.id,
-        status: player.status === "DISCONNECTED"
-          ? "PLAYING"
-          : player.status,
+        status: nextStatus,
       });
 
       socket.join(`quiz:${sessionId}`);
@@ -171,9 +236,10 @@ export function initGameSocket(io) {
       socket.emit("quiz:joined", {
         sessionId,
         playerId: player.id,
-        status: player.status,
+        status: nextStatus,
         isHost: false // Student is not host (usually)
       });
+      await emitLobbyUpdate(sessionId);
 
       const state = sessionState.get(sessionId);
       if (session?.status === "IN_PROGRESS" && state?.questions?.length) {
@@ -220,6 +286,7 @@ export function initGameSocket(io) {
         startedAt: session.started_at,
         totalTimeMs: session.total_time_ms,
       });
+      await emitLobbyUpdate(sessionId);
 
       const questions = await QuizQuestion.findAll({
         where: { quiz_id: session.quiz_id },
@@ -398,10 +465,17 @@ export function initGameSocket(io) {
      * HANDLE DISCONNECT
      */
     socket.on("disconnect", async () => {
+      const players = await GameSessionPlayer.findAll({
+        where: { socket_id: socket.id },
+        attributes: ["id", "session_id"],
+      });
+
       await GameSessionPlayer.update(
         { status: "DISCONNECTED" },
         { where: { socket_id: socket.id } }
       );
+
+      await Promise.all(players.map((player) => emitLobbyUpdate(player.session_id)));
     });
 
 

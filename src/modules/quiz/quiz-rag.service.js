@@ -11,6 +11,11 @@ import AppError from "../../shared/appError.js";
 const GEMINI_MODEL = (process.env.GEMINI_MODEL || "gemini-2.5-flash-lite").replace(/^models\//, "");
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
+function wantsTamilQuiz(topic = "", language = "") {
+  const text = `${topic} ${language}`.toLowerCase();
+  return /[\u0B80-\u0BFF]/.test(text) || /\b(tamil|tamizh|தமிழ்)\b/i.test(text);
+}
+
 function isQuotaError(err) {
   const status = Number(err?.status || err?.code || err?.error?.code || 0);
   const msg = String(err?.message || "").toLowerCase();
@@ -22,9 +27,10 @@ function isQuotaError(err) {
   );
 }
 
-function fallbackQuizQuestions(topic, classLevel, count) {
+function fallbackQuizQuestions(topic, classLevel, count, language = "English") {
   const safeClass = classLevel || "school";
   const safeCount = Math.min(Math.max(count || 5, 1), 20);
+  const isTamil = wantsTamilQuiz(topic, language);
 
   const rotate = (arr, by) => {
     const n = ((by % arr.length) + arr.length) % arr.length;
@@ -40,6 +46,91 @@ function fallbackQuizQuestions(topic, classLevel, count) {
       correct_option_index: correctIndex < 0 ? 0 : correctIndex,
     };
   };
+
+  if (isTamil) {
+    const tamilRows = [
+      makeQuestion(
+        `வகுப்பு ${safeClass} மாணவர்களுக்கு "${topic}" பற்றி எது சரியான விளக்கம்?`,
+        `"${topic}" என்பது படிப்பில் புரிந்து கொள்ள வேண்டிய முக்கிய கருத்தாகும்.`,
+        `"${topic}" என்பது படிப்புடன் தொடர்பில்லாதது.`,
+        `"${topic}" என்பது கேள்விகளை தவிர்ப்பது என்று பொருள்.`,
+        `"${topic}" எளிய உதாரணங்களால் விளக்க முடியாதது.`,
+        0
+      ),
+      makeQuestion(
+        `"${topic}" கற்றுக்கொள்ள சிறந்த முறை எது?`,
+        `முக்கிய கருத்துகளை புரிந்து கொண்டு உதாரணங்களைப் பயிற்சி செய்வது.`,
+        `அர்த்தம் புரியாமல் பதில்களை மட்டும் மனப்பாடம் செய்வது.`,
+        `ஆசிரியர் விளக்கத்தை கவனிக்காமல் இருப்பது.`,
+        `பயிற்சி கேள்விகளை முழுவதும் தவிர்ப்பது.`,
+        1
+      ),
+      makeQuestion(
+        `"${topic}" படிக்கும் போது முதலில் என்ன செய்ய வேண்டும்?`,
+        `அடிப்படை சொற்கள் மற்றும் கருத்துகளை தெளிவாகப் புரிந்து கொள்ள வேண்டும்.`,
+        `முதலில் கடினமான கேள்விகளை மட்டும் செய்ய வேண்டும்.`,
+        `காரணத்தைப் பார்க்காமல் இறுதி பதிலை மட்டும் பார்க்க வேண்டும்.`,
+        `குறிப்புகள் மற்றும் உதாரணங்களை தவிர்க்க வேண்டும்.`,
+        2
+      ),
+      makeQuestion(
+        `"${topic}" பற்றி சரியான கூற்று எது?`,
+        `${topic} உதாரணங்கள் மற்றும் மறுபயிற்சி மூலம் படிப்படியாக கற்றுக்கொள்ளலாம்.`,
+        `${topic} பள்ளி மாணவர்களுக்கு பயனற்றது.`,
+        `${topic} கற்க எந்த அடிப்படை கருத்தும் தேவையில்லை.`,
+        `${topic} பற்றி கேள்விகள் கேட்பது தவறு.`,
+        3
+      ),
+      makeQuestion(
+        `"${topic}" இல் நல்ல மதிப்பெண் பெற எது உதவும்?`,
+        `தொடர்ந்து பயிற்சி செய்து தவறுகளை திருத்திக் கொள்வது.`,
+        `தவறுகளை பார்க்காமல் அடுத்த பாடத்துக்கு செல்வது.`,
+        `ஒரே பதிலை எல்லா கேள்விக்கும் பயன்படுத்துவது.`,
+        `கடைசி நேரத்தில் மட்டும் படிப்பது.`,
+        4
+      ),
+      makeQuestion(
+        `ஒரு மாணவர் "${topic}" இல் குழப்பமடைந்தால் என்ன செய்ய வேண்டும்?`,
+        `அடிப்படையை மீண்டும் பார்த்து ஒரு எளிய உதாரணத்தை முயற்சி செய்ய வேண்டும்.`,
+        `பாடத்தை முழுவதும் விட்டுவிட வேண்டும்.`,
+        `கணிப்பால் மட்டும் பதில் தேர்வு செய்ய வேண்டும்.`,
+        `உதவி கேட்காமல் இருக்க வேண்டும்.`,
+        5
+      ),
+      makeQuestion(
+        `"${topic}" புரிந்துள்ளது என்பதற்கான நல்ல அறிகுறி எது?`,
+        `மாணவர் கருத்தை விளக்கி புதிய உதாரணத்தில் பயன்படுத்த முடியும்.`,
+        `மாணவர் ஒரு வரியை மட்டும் மனப்பாடம் செய்கிறார்.`,
+        `மாணவர் எல்லா பயிற்சியையும் தவிர்க்கிறார்.`,
+        `மாணவர் பதிலை ஊகிக்கிறார்.`,
+        6
+      ),
+      makeQuestion(
+        `"${topic}" தேர்வுக்கு முன் சிறந்த மறுபயிற்சி திட்டம் எது?`,
+        `முக்கிய விதிகளைப் பார்த்து கலப்பு கேள்விகளைப் பயிற்சி செய்து தவறுகளை சரிபார்ப்பது.`,
+        `தலைப்புகளை மட்டும் படித்து உதாரணங்களை தவிர்ப்பது.`,
+        `ஒரு பதில் முறையை மட்டும் மனப்பாடம் செய்வது.`,
+        `தேர்வு தொடங்கும் வரை எந்த கேள்வியும் செய்யாமல் இருப்பது.`,
+        7
+      ),
+    ];
+
+    while (tamilRows.length < Math.max(safeCount * 3, 12)) {
+      const seed = tamilRows.length;
+      tamilRows.push(
+        makeQuestion(
+          `"${topic}" தொடர்பான நிலை ${seed - 7} இல் சரியான அணுகுமுறை எது?`,
+          `${topic} கருத்தை சரியாகப் பயன்படுத்தி காரணத்துடன் பதில் காண்பது.`,
+          `${topic} கருத்தை முற்றிலும் புறக்கணிப்பது.`,
+          `புரிதலுக்கு பதிலாக ஊகிப்பது.`,
+          `பதில் சரியா என்று சரிபார்க்காமல் விடுவது.`,
+          seed
+        )
+      );
+    }
+
+    return tamilRows;
+  }
 
   const topicLc = String(topic || "").toLowerCase();
   const isMathLike = /(algebra|geometry|equation|fraction|ratio|decimal|percent|trigonometry|calculus)/i.test(topicLc);
@@ -282,12 +373,13 @@ function fillMissingQuestions({
   classLevel,
   count,
   blockedQuestionTexts = [],
+  language = "English",
 }) {
   if (questions.length >= count) {
     return questions.slice(0, count);
   }
 
-  const fallbackRows = fallbackQuizQuestions(topic, classLevel, Math.max(count * 3, 10));
+  const fallbackRows = fallbackQuizQuestions(topic, classLevel, Math.max(count * 3, 10), language);
   const remaining = dedupeQuestions(
     fallbackRows,
     blockedQuestionTexts.concat(questions.map((question) => question.question_text || question.question))
@@ -313,10 +405,12 @@ export async function generateQuizFromAi({
   classLevel,
   difficulty,
   numQuestions,
+  language,
 }) {
   const safeNumQuestions = Math.min(Math.max(numQuestions || 5, 1), 20);
   const safeDifficulty = difficulty || "MEDIUM";
   const safeClassLevel = classLevel || 5;
+  const quizLanguage = wantsTamilQuiz(topic, language) ? "Tamil" : "English";
   const previouslyAskedQuestionTexts = await getPreviouslyAskedQuestionTexts({
     userId: user?.id,
     topic,
@@ -328,6 +422,7 @@ export async function generateQuizFromAi({
     difficulty: safeDifficulty,
     numQuestions: safeNumQuestions,
     excludedQuestionTexts: previouslyAskedQuestionTexts.slice(0, 30),
+    language: quizLanguage,
   });
 
   let result;
@@ -348,6 +443,7 @@ export async function generateQuizFromAi({
       classLevel: safeClassLevel,
       count: safeNumQuestions,
       blockedQuestionTexts: previouslyAskedQuestionTexts,
+      language: quizLanguage,
     });
     if (fallbackRows.length < safeNumQuestions) {
       throw new AppError("Could not generate enough new quiz questions for this topic", 409);
@@ -398,6 +494,7 @@ export async function generateQuizFromAi({
     classLevel: safeClassLevel,
     count: safeNumQuestions,
     blockedQuestionTexts: previouslyAskedQuestionTexts,
+    language: quizLanguage,
   });
   if (preparedQuestions.length < safeNumQuestions) {
     throw new AppError("Could not generate enough new quiz questions for this topic", 409);
@@ -453,10 +550,6 @@ export async function getSinglePlayerQuizReview({ sessionId, user }) {
 
   if (!player && !isHostTeacher) {
     throw new AppError("Forbidden", 403);
-  }
-
-  if (session.mode !== "SINGLE") {
-    throw new AppError("Detailed review is available only for single-player quizzes", 400);
   }
 
   const questions = await QuizQuestion.findAll({

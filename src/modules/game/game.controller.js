@@ -1,4 +1,5 @@
 import User from "../users/user.model.js";
+import { Op } from "sequelize";
 import GameSession from "./game-session.model.js";
 import GameSessionPlayer from "./game-session-player.model.js";
 import PlayerAnswer from "./player-answer.model.js";
@@ -171,6 +172,7 @@ export const createMultiplayerQuiz = asyncHandler(async (req, res) => {
     numQuestions,
     maxPlayers,
     timeLimitMinutes,
+    language,
   } = req.body;
 
   if (!topic) {
@@ -187,6 +189,7 @@ export const createMultiplayerQuiz = asyncHandler(async (req, res) => {
     classLevel,
     difficulty,
     numQuestions,
+    language,
   });
 
   let code = null;
@@ -232,14 +235,101 @@ export const createMultiplayerQuiz = asyncHandler(async (req, res) => {
 export const getLeaderboard = asyncHandler(async (req, res) => {
   const { sessionId } = req.params;
 
-  const leaderboard = await GameSessionPlayer.findAll({
-    where: { session_id: sessionId },
-    order: [["score", "DESC"], ["finished_at", "ASC"]],
-    include: [{ model: User, attributes: ["id", "name"] }],
-    attributes: ["score", "finished_at"],
+  const session = await GameSession.findByPk(sessionId, {
+    include: [{ model: Quiz, attributes: ["id", "title", "topic"] }],
   });
 
-  res.json(leaderboard);
+  if (!session) {
+    throw new AppError("Session not found", 404);
+  }
+
+  const totalQuestions = await QuizQuestion.count({
+    where: { quiz_id: session.quiz_id },
+  });
+  const marksPerQuestion = 1;
+  const totalMarks = totalQuestions * marksPerQuestion;
+
+  const players = await GameSessionPlayer.findAll({
+    where: { session_id: sessionId },
+    include: [{ model: User, attributes: ["id", "name", "username", "avatar_url"] }],
+    attributes: ["id", "user_id", "score", "status", "finished_at", "is_host"],
+  });
+
+  const answers = players.length
+    ? await PlayerAnswer.findAll({
+        where: {
+          session_player_id: { [Op.in]: players.map((player) => player.id) },
+        },
+        attributes: ["session_player_id", "is_correct"],
+        raw: true,
+      })
+    : [];
+
+  const answerStats = answers.reduce((map, answer) => {
+    const key = String(answer.session_player_id);
+    const current = map.get(key) || { correctAnswers: 0, wrongAnswers: 0 };
+    if (answer.is_correct) current.correctAnswers += 1;
+    else current.wrongAnswers += 1;
+    map.set(key, current);
+    return map;
+  }, new Map());
+
+  const items = players
+    .map((player) => {
+      const plain = player.get({ plain: true });
+      const user = plain.User || plain.user || {};
+      const stats = answerStats.get(String(plain.id)) || {
+        correctAnswers: Number(plain.score || 0),
+        wrongAnswers: 0,
+      };
+      const score = stats.correctAnswers;
+      const displayName =
+        String(user.name || "").trim() ||
+        String(user.username || "").trim() ||
+        `Player ${plain.id}`;
+
+      return {
+        playerId: plain.id,
+        userId: plain.user_id,
+        displayName,
+        avatarUrl: user.avatar_url || null,
+        score,
+        correctAnswers: stats.correctAnswers,
+        wrongAnswers: stats.wrongAnswers,
+        answeredCount: stats.correctAnswers + stats.wrongAnswers,
+        totalQuestions,
+        obtainedMarks: score * marksPerQuestion,
+        totalMarks,
+        marksPerQuestion,
+        status: plain.status,
+        finishedAt: plain.finished_at,
+        isHost: plain.is_host,
+        User: {
+          id: user.id || plain.user_id,
+          name: user.name || displayName,
+          username: user.username || "",
+          avatar_url: user.avatar_url || null,
+        },
+      };
+    })
+    .sort((left, right) => {
+      if (right.score !== left.score) return right.score - left.score;
+      return String(left.finishedAt || "").localeCompare(String(right.finishedAt || ""));
+    });
+
+  res.json({
+    session: {
+      id: session.id,
+      mode: session.mode,
+      quizId: session.quiz_id,
+      quizTitle: session.Quiz?.title || session.Quiz?.topic || "Quiz",
+      topic: session.Quiz?.topic || null,
+      totalQuestions,
+      marksPerQuestion,
+      totalMarks,
+    },
+    items,
+  });
 });
 
 export const joinMultiplayerQuiz = asyncHandler(async (req, res) => {
@@ -295,7 +385,10 @@ export const joinMultiplayerQuiz = asyncHandler(async (req, res) => {
   }
 
   const count = await GameSessionPlayer.count({
-    where: { session_id: session.id },
+    where: {
+      session_id: session.id,
+      status: { [Op.notIn]: ["DISCONNECTED", "FINISHED"] },
+    },
   });
 
   if (session.max_players && count >= session.max_players) {
@@ -306,7 +399,7 @@ export const joinMultiplayerQuiz = asyncHandler(async (req, res) => {
     session_id: session.id,
     user_id: req.user.id,
     is_host: session.host_user_id === req.user.id, // Should usually be false for students if teacher created it
-    status: "WAITING",
+    status: session.status === "IN_PROGRESS" ? "PLAYING" : "JOINED",
   });
 
   res.json({

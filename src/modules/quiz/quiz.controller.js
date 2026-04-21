@@ -52,6 +52,7 @@ export const generateQuiz = asyncHandler(async (req, res) => {
     classLevel,
     difficulty,
     numQuestions,
+    language,
   } = req.body;
 
   if (!topic) {
@@ -64,6 +65,7 @@ export const generateQuiz = asyncHandler(async (req, res) => {
     classLevel,
     difficulty,
     numQuestions,
+    language,
   });
 
   res.json({
