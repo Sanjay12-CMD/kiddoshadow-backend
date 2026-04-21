@@ -149,6 +149,7 @@ import entrepreneurshipRoutes from "./src/modules/entrepreneurship/entrepreneurs
 
 import paymentLogRoutes from "./src/modules/payment-logs/payment-log.routes.js";
 import voiceRoutes from "./src/modules/voice-logs/voice.routes.js";
+import mindscopeRoutes from "./src/modules/mindscope/mindscope.routes.js";
 
 
 
@@ -176,6 +177,7 @@ app.use("/api/timetables", timetableRoutes);
 app.use("/api/report-cards", reportCardRoutes);
 app.use("/api/exams", examRoutes);
 app.use("/api/payment-logs", paymentLogRoutes);
+app.use("/api/mindscope", mindscopeRoutes);
 
 // approvals
 app.use("/api", approvalRoutes);
