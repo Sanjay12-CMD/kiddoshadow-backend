@@ -140,6 +140,7 @@ import communicationSkillsRoutes from "./src/modules/communication-skills/commun
 import scienceMathLearningRoutes from "./src/modules/science-math-learning/scienceMath.routes.js";
 import creativeSkillsRoutes from "./src/modules/creative-skills/creative.routes.js";
 import competitiveExamRoutes from "./src/modules/competitive-exam/competitive.routes.js";
+import questionBankRoutes from "./src/modules/question-bank/questionBank.routes.js";
 import careerPathRoutes from "./src/modules/career-path/careerPath.routes.js";
 import studyStrategyRoutes from "./src/modules/study-strategy/strategy.routes.js";
 import advancedExamRoutes from "./src/modules/advanced-exams/advancedExam.routes.js";
@@ -230,6 +231,7 @@ app.use("/api/communication-skills", communicationSkillsRoutes);
 app.use("/api/science-math-learning", scienceMathLearningRoutes);
 app.use("/api/creative-skills", creativeSkillsRoutes);
 app.use("/api/competitive-exam", competitiveExamRoutes);
+app.use("/api/question-bank", questionBankRoutes);
 app.use("/api/career-path", careerPathRoutes);
 app.use("/api/study-strategy", studyStrategyRoutes);
 app.use("/api/advanced-exams", advancedExamRoutes);
