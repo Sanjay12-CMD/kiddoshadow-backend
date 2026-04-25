@@ -105,25 +105,38 @@ export const completeStudentProfile = asyncHandler(async (req, res) => {
     }
   }
 
+  let sharedLinkedParentPhone = false;
+
   if (phone) {
     const existingPhone = await User.findOne({ where: { phone } });
     if (existingPhone && existingPhone.id !== req.user.id) {
-      const linkedParent = await Parent.findOne({
-        where: {
-          user_id: existingPhone.id,
-          student_id: student.id,
-        },
-      });
+      let allowedLinkedParent = false;
 
-      if (!linkedParent) {
+      if (existingPhone.role === "parent") {
+        const linkedParents = await Parent.findAll({
+          where: {
+            user_id: existingPhone.id,
+            student_id: student.id,
+          },
+          attributes: ["id"],
+        });
+
+        allowedLinkedParent = linkedParents.length > 0;
+      }
+
+      if (!allowedLinkedParent) {
         throw new AppError("Phone already in use", 400);
       }
+
+      sharedLinkedParentPhone = allowedLinkedParent;
     }
   }
 
   const userUpdates = {};
   if (name !== undefined) userUpdates.name = name;
-  if (phone !== undefined) userUpdates.phone = phone;
+  if (phone !== undefined) {
+    userUpdates.phone = sharedLinkedParentPhone ? null : phone;
+  }
   if (req.body.email !== undefined) userUpdates.email = req.body.email;
   if (avatar_url !== undefined) userUpdates.avatar_url = avatar_url || null;
   if (req.user.first_login) {
@@ -178,9 +191,16 @@ export const getMyProfile = asyncHandler(async (req, res) => {
 
   const data = student.get({ plain: true });
   const user = data.user || {};
+  const linkedParent = await Parent.findOne({
+    where: { student_id: student.id },
+    include: [{ model: User, required: false }],
+  });
+  const linkedParentPhone = linkedParent?.user?.phone || "";
+  const resolvedPhone = user.phone || linkedParentPhone || "";
   res.json({
     ...data,
     ...user,
+    phone: resolvedPhone,
     avatar_url: user.avatar_url || "",
   });
 });

@@ -150,6 +150,8 @@ export const updateParentProfileService = async (user_id, data) => {
     throw new AppError("Parent not found", 404);
   }
 
+  let sharedLinkedStudentPhone = false;
+
   if (data?.phone) {
     const existingPhoneUser = await User.findOne({
       where: {
@@ -160,36 +162,45 @@ export const updateParentProfileService = async (user_id, data) => {
     });
 
     if (existingPhoneUser) {
+      const links = await Parent.findAll({
+        where: { user_id },
+        attributes: ["student_id"],
+      });
+
+      const linkedStudentIds = links
+        .map((link) => Number(link.student_id))
+        .filter(Boolean);
+
       let allowedLinkedStudent = false;
 
-      if (existingPhoneUser.role === "student") {
-        const links = await Parent.findAll({
-          where: { user_id },
-          attributes: ["student_id"],
+      if (linkedStudentIds.length > 0) {
+        const linkedStudents = await Student.findAll({
+          where: {
+            id: { [Op.in]: linkedStudentIds },
+          },
+          attributes: ["id", "user_id"],
         });
 
-        const linkedStudentIds = links.map((l) => Number(l.student_id)).filter(Boolean);
-
-        if (linkedStudentIds.length) {
-          const student = await Student.findOne({
-            where: {
-              id: { [Op.in]: linkedStudentIds },
-              user_id: existingPhoneUser.id,
-            },
-            attributes: ["id"],
-          });
-
-          allowedLinkedStudent = Boolean(student);
-        }
+        allowedLinkedStudent = linkedStudents.some(
+          (student) => Number(student.user_id) === Number(existingPhoneUser.id)
+        );
       }
 
       if (!allowedLinkedStudent) {
         throw new AppError("Phone already in use", 400);
       }
+
+      sharedLinkedStudentPhone = allowedLinkedStudent;
     }
   }
 
-  await user.update(data);
+  const userUpdateData = { ...data };
+
+  if (sharedLinkedStudentPhone) {
+    userUpdateData.phone = null;
+  }
+
+  await user.update(userUpdateData);
 
   const parent = await Parent.findOne({ where: { user_id } });
   if (parent) {

@@ -170,7 +170,11 @@ export const getPendingParentApprovalsForTeacherService = async ({
     limit,
     offset,
     distinct: true,
-    order: [["created_at", "DESC"]],
+    order: [
+      [User, "name", "ASC"],
+      [User, "username", "ASC"],
+      ["created_at", "ASC"],
+    ],
   });
 };
 
@@ -250,7 +254,11 @@ export const getPendingParentApprovalsService = async ({
     limit,
     offset,
     distinct: true,
-    order: [["created_at", "DESC"]],
+    order: [
+      [User, "name", "ASC"],
+      [User, "username", "ASC"],
+      ["created_at", "ASC"],
+    ],
   });
 };
 

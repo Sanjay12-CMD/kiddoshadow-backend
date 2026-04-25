@@ -16,30 +16,42 @@ Additional STEM requirements:
 `;
 };
 
+const toWholeNumber = (value, fallback = 0) => {
+  const num = Number(value);
+  if (!Number.isFinite(num) || num < 0) return fallback;
+  return Math.floor(num);
+};
+
 const resolveQuestionPatternText = (questionPattern = {}) => {
-  const selectedOneMarkType = String(questionPattern?.one_mark_type ?? questionPattern?.oneMarkType ?? "choose").replace(/_/g, " ");
-  const selectedOneMarkCount = Number(questionPattern?.one_mark_count ?? questionPattern?.oneMarkCount ?? 4) || 0;
-  const oneMarkChooseCount = Number(questionPattern?.one_mark_choose_count ?? questionPattern?.oneMarkChooseCount ?? 0) || 0;
-  const oneMarkFillCount = Number(questionPattern?.one_mark_fill_count ?? questionPattern?.oneMarkFillCount ?? 0) || 0;
-  const oneMarkMatchCount = Number(questionPattern?.one_mark_match_count ?? questionPattern?.oneMarkMatchCount ?? 0) || 0;
-  const oneMarkTrueFalseCount = Number(questionPattern?.one_mark_true_false_count ?? questionPattern?.oneMarkTrueFalseCount ?? 0) || 0;
-  const splitOneMarkCount = oneMarkChooseCount + oneMarkFillCount + oneMarkMatchCount + oneMarkTrueFalseCount;
-  const oneMarkCount = splitOneMarkCount || selectedOneMarkCount;
+  const customPatterns = []
+    .concat(questionPattern?.patterns || questionPattern?.rows || [])
+    .filter(Boolean)
+    .map((item) => ({
+      title: item?.title || String(item?.type || "Choose").replace(/_/g, " "),
+      marks: Math.min(8, Math.max(1, toWholeNumber(item?.marks, 1))),
+      count: toWholeNumber(item?.count, 0),
+    }))
+    .filter((item) => item.count > 0);
+
+  if (customPatterns.length) {
+    const totalMarks = customPatterns.reduce((sum, item) => sum + item.count * item.marks, 0);
+    return [
+      ...customPatterns.map((item) => `- ${item.title}: ${item.count} question(s) x ${item.marks} mark(s)`),
+      `Total Marks: ${totalMarks}`,
+    ].join("\n");
+  }
+
+  const oneMarkCount = Number(questionPattern?.one_mark_count ?? questionPattern?.oneMarkCount ?? 4) || 0;
   const twoMarkCount = Number(questionPattern?.two_mark_count ?? questionPattern?.twoMarkCount ?? 4) || 0;
   const threeMarkCount = Number(questionPattern?.three_mark_count ?? questionPattern?.threeMarkCount ?? 2) || 0;
   const fiveMarkCount = Number(questionPattern?.five_mark_count ?? questionPattern?.fiveMarkCount ?? 1) || 0;
   const totalMarks = oneMarkCount + twoMarkCount * 2 + threeMarkCount * 3 + fiveMarkCount * 5;
 
   return [
-    `Section A: ${oneMarkCount} questions x 1 mark`,
-    `  - Selected 1 mark type: ${selectedOneMarkType}`,
-    `  - Choose the correct answer: ${splitOneMarkCount ? oneMarkChooseCount : selectedOneMarkType === "choose" ? oneMarkCount : 0}`,
-    `  - Fill in the blanks: ${oneMarkFillCount}`,
-    `  - Match the following: ${oneMarkMatchCount}`,
-    `  - True or False: ${oneMarkTrueFalseCount}`,
-    `Section B: ${twoMarkCount} questions x 2 marks`,
-    `Section C: ${threeMarkCount} questions x 3 marks`,
-    `Section D: ${fiveMarkCount} questions x 5 marks`,
+    `- Choose / Fill / Match / True or False: ${oneMarkCount} question(s) x 1 mark`,
+    `- Short Answer: ${twoMarkCount} question(s) x 2 marks`,
+    `- Short Answer: ${threeMarkCount} question(s) x 3 marks`,
+    `- Paragraph / Long Answer: ${fiveMarkCount} question(s) x 5 marks`,
     `Total Marks: ${totalMarks}`,
   ].join("\n");
 };
@@ -77,14 +89,8 @@ Instructions:
 ${resolveQuestionPatternText(questionPattern || camelQuestionPattern)}
 
 Paper structure:
-Section A: One mark questions
-  - Choose the correct answer
-  - Fill in the blanks
-  - Match the following
-  - True or False
-Section B: Two mark questions
-Section C: Three mark questions
-Section D: Five mark questions
+- Group questions professionally by marks.
+- Use the requested pattern titles such as Choose, Text, Fill Up, Match, True or False, Synonyms, Antonyms, Grammar, Paragraph, Short Answer, and Long Answer wherever provided.
 
 Clearly mention marks for each question.
 ${buildStemGuidance(subject)}

@@ -106,17 +106,56 @@ export const updateParentProfile = async (req, res, next) => {
 export const getMyProfile = async (req, res, next) => {
   try {
     const Parent = (await import("./parent.model.js")).default;
+    const User = (await import("../users/user.model.js")).default;
+    const Student = (await import("../students/student.model.js")).default;
+    const Class = (await import("../classes/classes.model.js")).default;
+    const Section = (await import("../sections/section.model.js")).default;
 
     const parent = await Parent.findOne({
       where: { user_id: req.user.id },
-      include: ["user", "student"],
+      include: [
+        {
+          model: User,
+          required: false,
+        },
+        {
+          model: Student,
+          required: false,
+          include: [
+            {
+              model: User,
+              required: false,
+            },
+            {
+              model: Class,
+              required: false,
+            },
+            {
+              model: Section,
+              required: false,
+            },
+          ],
+        },
+      ],
     });
 
     if (!parent) {
       return res.json(req.user);
     }
 
-    res.json(parent);
+    const parentData = parent.toJSON();
+    const parentUser = parentData.user || {};
+    const linkedStudentUser = parentData.student?.user || {};
+    const resolvedPhone = parentUser.phone || linkedStudentUser.phone || "";
+
+    res.json({
+      ...parentData,
+      phone: resolvedPhone,
+      user: {
+        ...parentUser,
+        phone: resolvedPhone,
+      },
+    });
   } catch (e) {
     next(e);
   }
