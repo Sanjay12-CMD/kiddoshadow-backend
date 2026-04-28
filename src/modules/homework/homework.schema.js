@@ -15,6 +15,7 @@ export const listHomeworkSchema = z.object({
   query: z.object({
     class_id: z.coerce.number().int().positive().optional(),
     section_id: z.coerce.number().int().positive().optional(),
+    student_id: z.coerce.number().int().positive().optional(),
     date: z.string().optional(), // due date filter
     created_date: z.string().optional(), // created_at filter (YYYY-MM-DD)
   }),

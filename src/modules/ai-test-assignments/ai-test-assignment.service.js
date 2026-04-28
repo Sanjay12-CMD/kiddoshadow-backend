@@ -899,7 +899,7 @@ export async function getStudentLockStatus({ user }) {
   };
 }
 
-export async function listParentAssignmentResults({ user }) {
+export async function listParentAssignmentResults({ user, student_id = null }) {
   const links = await Parent.findAll({
     where: {
       user_id: user.id,
@@ -914,7 +914,10 @@ export async function listParentAssignmentResults({ user }) {
     ],
   });
 
-  const studentIds = links.map((item) => item.student_id).filter(Boolean);
+  let studentIds = links.map((item) => item.student_id).filter(Boolean);
+  if (student_id) {
+    studentIds = studentIds.filter((id) => Number(id) === Number(student_id));
+  }
   if (!studentIds.length) return [];
 
   const rows = await AITestSubmission.findAll({

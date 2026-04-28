@@ -77,7 +77,10 @@ export const getAssignedTestLockStatus = asyncHandler(async (req, res) => {
 });
 
 export const listParentAssignedTests = asyncHandler(async (req, res) => {
-  const items = await listParentAssignmentResults({ user: req.user });
+  const items = await listParentAssignmentResults({
+    user: req.user,
+    student_id: req.query.student_id ? Number(req.query.student_id) : null,
+  });
   res.json({ success: true, items });
 });
 

@@ -194,7 +194,11 @@ export const updateParentProfileService = async (user_id, data) => {
     }
   }
 
+  const normalizedRelationType =
+    data?.relation_type === "parent" ? "guardian" : data?.relation_type;
   const userUpdateData = { ...data };
+
+  delete userUpdateData.relation_type;
 
   if (sharedLinkedStudentPhone) {
     userUpdateData.phone = null;
@@ -204,12 +208,18 @@ export const updateParentProfileService = async (user_id, data) => {
 
   const parent = await Parent.findOne({ where: { user_id } });
   if (parent) {
-    await parent.update({
+    const parentUpdateData = {
       approval_status: "pending",
       approved_by: null,
       approved_at: null,
       rejection_reason: null,
-    });
+    };
+
+    if (normalizedRelationType) {
+      parentUpdateData.relation_type = normalizedRelationType;
+    }
+
+    await parent.update(parentUpdateData);
   }
   return user;
 };

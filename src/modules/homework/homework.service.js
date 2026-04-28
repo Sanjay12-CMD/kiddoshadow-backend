@@ -77,6 +77,7 @@ export const listHomeworkService = async ({
   school_id,
   class_id,
   section_id,
+  student_id,
   date,
   created_date,
   query,
@@ -95,8 +96,13 @@ export const listHomeworkService = async ({
     where.class_id = user.class_id;
     where.section_id = user.section_id;
   } else if (user?.role === "parent") {
+    const parentWhere = { user_id: user.id };
+    if (student_id) {
+      parentWhere.student_id = Number(student_id);
+    }
+
     const parent = await Parent.findOne({
-      where: { user_id: user.id },
+      where: parentWhere,
       include: [{ model: Student, attributes: ["class_id", "section_id"] }],
     });
     const student = parent?.student || parent?.Student;

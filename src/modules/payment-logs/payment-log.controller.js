@@ -55,6 +55,7 @@ export const getParentPaymentLogs = asyncHandler(async (req, res) => {
   const data = await getParentPaymentLogsService({
     schoolId: req.user.school_id,
     parentUserId: req.user.id,
+    studentId: req.query.student_id ? Number(req.query.student_id) : null,
   });
 
   res.json({

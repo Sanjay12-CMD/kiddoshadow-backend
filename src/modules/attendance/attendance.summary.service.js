@@ -154,14 +154,17 @@ export const getParentAttendanceSummaryService = async ({
   query,
 }) => {
   const { limit, offset } = getPagination(query);
-  const { from_date, to_date } = query || {};
+  const { from_date, to_date, student_id } = query || {};
 
   const links = await Parent.findAll({
     where: { user_id: parent_user_id, approval_status: "approved" },
     attributes: ["student_id"],
   });
 
-  const studentIds = links.map((l) => l.student_id);
+  let studentIds = links.map((l) => l.student_id);
+  if (student_id) {
+    studentIds = studentIds.filter((id) => Number(id) === Number(student_id));
+  }
   if (!studentIds.length) return { count: 0, rows: [] };
 
   const sessionWhere = {};

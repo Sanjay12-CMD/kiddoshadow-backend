@@ -10,5 +10,7 @@ export const parentChildrenQuerySchema = z.object({
 
 /* daily dashboard (no params needed) */
 export const parentDashboardSchema = z.object({
-  query: z.object({}),
+  query: z.object({
+    student_id: z.string().optional(),
+  }),
 });

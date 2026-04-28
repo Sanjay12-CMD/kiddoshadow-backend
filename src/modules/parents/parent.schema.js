@@ -23,4 +23,7 @@ export const linkExistingParentSchema = z.object({
 export const updateParentProfileSchema = z.object({
   name: z.string().min(1).optional(),
   phone: z.string().optional(),
+  email: z.string().email().optional(),
+  avatar_url: z.string().optional(),
+  relation_type: z.enum(["guardian", "parent"]).optional(),
 });

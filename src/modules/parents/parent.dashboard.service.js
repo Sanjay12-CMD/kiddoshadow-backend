@@ -52,7 +52,7 @@ export const getParentChildrenService = async ({
     ],
     limit,
     offset,
-    order: [["created_at", "DESC"]],
+    order: [["created_at", "ASC"], ["id", "ASC"]],
   });
 };
 
@@ -70,6 +70,7 @@ const getDayName = () =>
 export const getParentDailyDashboardService = async ({
   school_id,
   parent_user_id,
+  student_id = null,
 }) => {
   // get children
   const students = await Student.findAll({
@@ -86,12 +87,17 @@ export const getParentDailyDashboardService = async ({
     ],
   });
 
+  const normalizedStudentId = student_id ? Number(student_id) : null;
+  const filteredStudents = normalizedStudentId
+    ? students.filter((student) => Number(student.id) === normalizedStudentId)
+    : students;
+
   const today = getToday();
   const day = getDayName();
 
   const dashboards = [];
 
-  for (const student of students) {
+  for (const student of filteredStudents) {
     /* -------- Timetable (today) -------- */
     const timetable = await Timetable.findAll({
       where: {

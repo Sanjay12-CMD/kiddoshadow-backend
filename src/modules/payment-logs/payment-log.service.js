@@ -45,6 +45,16 @@ const PAYMENT_DATE_COLUMN_CANDIDATES = [
 const PAYMENT_TITLE_COLUMN_CANDIDATES = ["title", "fee_title", "name"];
 const PAYMENT_MESSAGE_COLUMN_CANDIDATES = ["message", "description", "remarks"];
 const PAYMENT_DUE_DATE_COLUMN_CANDIDATES = ["due_date", "deadline_date"];
+const SCHOOL_UPI_COLUMN_CANDIDATES = [
+  "upi_id",
+  "upi_vpa",
+  "payment_upi_id",
+  "merchant_upi_id",
+  "school_upi_id",
+  "gpay_upi_id",
+  "paytm_upi_id",
+  "phonepe_upi_id",
+];
 const CLASS_DROPDOWN_ORDER = [
   "prekg",
   "lkg",
@@ -255,6 +265,38 @@ const getDefaultClassAmount = async ({ schoolId, classId }) => {
   return toNumber(rows?.[0]?.default_amount);
 };
 
+const getSchoolPaymentProfile = async ({ schoolId }) => {
+  const schoolColumns = await getTableColumns("schools");
+  const upiColumn = pickFirstExisting(schoolColumns, SCHOOL_UPI_COLUMN_CANDIDATES);
+
+  const selectedColumns = [
+    `"id"`,
+    `"school_name"`,
+    `"payment_mode"`,
+    `"contact_phone"`,
+    `"email"`,
+  ];
+
+  if (upiColumn) {
+    selectedColumns.push(`"${upiColumn}" AS upi_id`);
+  }
+
+  const rows = await db.query(
+    `
+      SELECT ${selectedColumns.join(", ")}
+      FROM schools
+      WHERE id = :schoolId
+      LIMIT 1
+    `,
+    {
+      replacements: { schoolId },
+      type: QueryTypes.SELECT,
+    }
+  );
+
+  return rows?.[0] || null;
+};
+
 const getLatestPaymentsByStudent = async ({
   schoolId,
   classId = null,
@@ -323,6 +365,9 @@ const getLatestPaymentsByStudent = async ({
       paidAmount,
       paymentStatus,
       paymentDate: dateCol ? row[dateCol] ?? null : null,
+      title: titleCol ? row[titleCol] ?? null : null,
+      message: messageCol ? row[messageCol] ?? null : null,
+      dueDate: dueDateCol ? row[dueDateCol] ?? null : null,
     });
   }
 
@@ -625,7 +670,7 @@ export const getPaymentLogDropdownOptionsService = async ({ schoolId, classId })
   };
 };
 
-export const getParentPaymentLogsService = async ({ schoolId, parentUserId }) => {
+export const getParentPaymentLogsService = async ({ schoolId, parentUserId, studentId = null }) => {
   if (!schoolId) {
     throw new AppError("School context is required", 400);
   }
@@ -648,7 +693,11 @@ export const getParentPaymentLogsService = async ({ schoolId, parentUserId }) =>
 
   const students = parentLinks
     .map((link) => link.student ?? link.Student)
-    .filter(Boolean);
+    .filter((student) => {
+      if (!student) return false;
+      if (!studentId) return true;
+      return Number(student.id) === Number(studentId);
+    });
 
   const studentIds = [...new Set(students.map((s) => Number(s.id)).filter(Number.isFinite))];
   const paymentByStudent = await getLatestPaymentsByStudent({
@@ -681,6 +730,9 @@ export const getParentPaymentLogsService = async ({ schoolId, parentUserId }) =>
       balance,
       paymentStatus: payment?.paymentStatus ?? (balance <= 0 ? "Paid" : "Not Paid"),
       paymentDate: payment?.paymentDate ?? null,
+      title: payment?.title ?? null,
+      message: payment?.message ?? null,
+      dueDate: payment?.dueDate ?? null,
     };
   });
 
@@ -694,17 +746,18 @@ export const getParentPaymentLogsService = async ({ schoolId, parentUserId }) =>
     { totalDue: 0, totalPaid: 0, totalBalance: 0 }
   );
 
-  const school = await School.findByPk(schoolId, {
-    attributes: ["id", "school_name", "payment_mode"],
-  });
+  const school = await getSchoolPaymentProfile({ schoolId });
 
   return {
     school: school
-      ? {
-          id: school.id,
-          school_name: school.school_name,
-          payment_mode: school.payment_mode,
-        }
+        ? {
+            id: school.id,
+            school_name: school.school_name,
+            payment_mode: school.payment_mode,
+            contact_phone: school.contact_phone || null,
+            email: school.email || null,
+            upi_id: school.upi_id || null,
+          }
       : null,
     totals: {
       ...totals,

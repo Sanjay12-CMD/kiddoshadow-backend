@@ -10,6 +10,7 @@ export const getParentDashboard = asyncHandler(async (req, res) => {
     getParentDailyDashboardService({
       school_id: req.user.school_id,
       parent_user_id: req.user.id,
+      student_id: req.query.student_id ? Number(req.query.student_id) : null,
     }),
     Parent.findAll({
       where: { user_id: req.user.id, approval_status: "approved" },
@@ -31,7 +32,10 @@ export const getParentDashboard = asyncHandler(async (req, res) => {
     class_ids: classIds,
     section_ids: sectionIds,
   });
-  const assignedTests = await listParentAssignmentResults({ user: req.user });
+  const assignedTests = await listParentAssignmentResults({
+    user: req.user,
+    student_id: req.query.student_id ? Number(req.query.student_id) : null,
+  });
 
   res.json({
     success: true,
