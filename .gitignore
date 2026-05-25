@@ -1,5 +1,8 @@
-node_modules
+node_modules/
+venv/
+venv311/
 .env
-rag_data
-books
-package-lock.json
+__pycache__/
+*.pyc
+dist/
+build/
