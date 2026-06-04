@@ -9,6 +9,7 @@ const router = express.Router();
 
 const mimeTypeByExtension = new Map([
   [".png", "image/png"],
+  [".svg", "image/svg+xml"],
 ]);
 
 router.get(

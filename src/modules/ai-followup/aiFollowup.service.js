@@ -3,6 +3,7 @@ import { GoogleGenAI } from "@google/genai";
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
+import { fileURLToPath } from "url";
 
 loadEnv();
 
@@ -91,25 +92,6 @@ Rules:
 - Keep the response clear for a school student.
 - Return only the follow-up answer text.
 `.trim();
-
-const ai = process.env.GEMINI_API_KEY
-  ? new GoogleGenAI({
-      apiKey: process.env.GEMINI_API_KEY,
-    })
-  : null;
-
-const PREVIEW_IMAGE_MODELS = [
-  GEMINI_IMAGE_PREVIEW_MODEL,
-  "gemini-3-pro-image-preview",
-].filter(Boolean);
-
-const IMAGE_GENERATION_MODELS = [
-  GEMINI_IMAGE_MODEL,
-  "imagen-4.0-fast-generate-001",
-].filter(Boolean);
-
-const normalizeText = (value) =>
-  String(value || "").trim();
 
 const summarizeLine = (
   value,
@@ -247,8 +229,9 @@ const writeGeneratedImage = ({
   originalQuestion,
   previousAnswer,
   bytes,
+  extension = "png",
 }) => {
-  ensureUploadDir();
+  fs.mkdirSync(FOLLOWUP_UPLOAD_DIR, { recursive: true });
 
   const version = Date.now();
   const hash = crypto
@@ -259,19 +242,19 @@ const writeGeneratedImage = ({
     .digest("hex")
     .slice(0, 12);
 
-  const filename = `picture-followup-${hash}.png`;
+  const filename = `picture-followup-${hash}.${extension}`;
   const filePath = path.join(
     FOLLOWUP_UPLOAD_DIR,
     filename
   );
 
-  fs.writeFileSync(filePath, bytes);
+  fs.writeFileSync(filePath, Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes));
 
   return `${FOLLOWUP_UPLOAD_URL}/${filename}`;
 };
 
 const createPictureImage = async ({ originalQuestion, previousAnswer, caption }) => {
-  await mkdir(FOLLOWUP_UPLOAD_DIR, { recursive: true });
+  fs.mkdirSync(FOLLOWUP_UPLOAD_DIR, { recursive: true });
 
   const prompt = buildImagePrompt({ originalQuestion, previousAnswer, caption });
   if (ai) {
@@ -311,8 +294,6 @@ const createPictureImage = async ({ originalQuestion, previousAnswer, caption })
 
   return writeGeneratedImage({
     originalQuestion,
-    "",
-    "Previous AI Answer:",
     previousAnswer,
     bytes: buildFallbackPictureSvg({ originalQuestion, previousAnswer, caption }),
     extension: "svg",
@@ -389,6 +370,14 @@ const buildFallbackFollowupAnswer = ({ originalQuestion, previousAnswer, followu
     "",
     `So, in simple words: ${secondPoint}`,
   ].join("\n");
+};
+
+const extractGeneratedText = (result) =>
+  (
+    result?.text ||
+    result?.candidates?.[0]?.content?.parts?.map((part) => part?.text || "").join("") ||
+    ""
+  ).trim();
 
 const generateTextAnswer = async ({
   originalQuestion,
@@ -402,8 +391,8 @@ const generateTextAnswer = async ({
   try {
     const result =
       await ai.models.generateContent({
-        model: GEMINI_TEXT_MODEL,
-        contents: buildFollowupPrompt({
+        model: GEMINI_MODEL,
+        contents: buildPrompt({
           originalQuestion,
           previousAnswer,
           followupType,
@@ -500,22 +489,19 @@ export async function generateAiFollowup({
     );
   }
 
-  if (safeFollowupType === "picture") {
-    const answer = toPictureCaption("", safeOriginalQuestion);
+  if (safeType === "picture") {
+    const answer = `${getTopicText(safeQuestion)} - picture explanation`;
     const imageUrl = await createPictureImage({
-      originalQuestion: safeOriginalQuestion,
-      previousAnswer: safePreviousAnswer,
+      originalQuestion: safeQuestion,
+      previousAnswer: safeAnswer,
       caption: answer,
     });
 
     return {
       answer,
-      followupType: safeFollowupType,
+      followupType: safeType,
       source: "ai-followup",
-      imageUrl:
-        imageResult.imageUrl,
-      imageDataUrl:
-        imageResult.imageDataUrl,
+      imageUrl,
       followupSuggestions:
         buildStudentFollowupSuggestions({
           originalQuestion:
